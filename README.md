@@ -1,3 +1,48 @@
+# 📱 Couples App – Flow & Features  
+
+## 1. Sign Up & Profile Creation  
+- Each partner creates their own account (with name, photo, details).  
+- A unique 6-character code is generated for every profile (e.g., `U7I24Y`).  
+---
+## 2. Account Linking  
+- Each partner shares their code with the other.  
+- Once both enter each other’s code, their accounts are linked together.  
+- From this point, all features become shared between the two.  
+---
+## 3. Home Dashboard  
+- Shows couple’s overview: upcoming events, goals, tasks, recent updates.  
+- Both can see what the other added/changed in real time.  
+---
+## 4. Shared Features (After Linking)  
+- **Shared Calendar** – Add events, anniversaries, reminders, instantly visible to both.  
+- **Travel Planning** – Create itineraries, packing lists, and trip budgets.  
+- **Tasks & Goals** – Manage joint to-do lists and personal/couple goals.  
+- **Event Planning** – Plan birthdays, date nights, parties.  
+- **Ideas Board** – Save random ideas (date ideas, gift ideas, business plans).  
+- **Business Ideas Vault** – Share & brainstorm business concepts.  
+- **Shared Notes & Lists** – Grocery, shopping, or movie lists.  
+- **Mood Tracker** – Update mood daily; partner gets to see it.  
+- **Finance Tracker** – Track expenses and budgets together.  
+- **Bucket List** – Life goals and dream activities to complete together.  
+- **Memory Timeline** – Store photos, milestones, and moments.  
+- **Private Chat / Voice Notes** – Messaging & audio just for the couple.  
+- **Habit Tracker** – Support each other’s habits (fitness, reading, etc.).  
+- **Couple Challenges** – Fun challenges like *“30-day relationship goals.”*  
+- **Surprise Mode** – Hide a surprise plan until reveal date.  
+- **Reminders** – Automated alerts for anniversaries, tasks, bills, health checkups.  
+- **Shared Journal** – A private diary for both.  
+- **Polls & Voting** – Quick polls for decisions (like dinner/movie).  
+- **Secret Wishlist** – Each partner adds gift wishes, shown only as hints.  
+- **Emergency Info** – Health details, important contacts in case of emergency.  
+---
+## 5. Real-time Sync  
+- Any action (adding an event, editing a goal, updating a task) instantly updates for both partners.  
+---
+## 6. Notifications  
+- Push notifications for updates (e.g., *“Your partner added a new event on Sunday”*).  
+
+###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### 
+
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started
