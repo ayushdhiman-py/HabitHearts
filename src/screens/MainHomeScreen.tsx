@@ -13,7 +13,8 @@ import {
   Pressable,
   BackHandler,
   Platform,
-  StatusBar
+  StatusBar,
+  Animated
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
@@ -68,6 +69,7 @@ const MainHomeScreen = () => {
   const insets = useSafeAreaInsets();
   const tasksUnsubscribeRef = useRef<(() => void) | null>(null);
   const eventsUnsubscribeRef = useRef<(() => void) | null>(null);
+  const heatmapDaysRef = useRef<any[]>([]);
 
   const fetchLinkedUsers = useCallback(async () => {
     if (user) {
@@ -84,7 +86,6 @@ const MainHomeScreen = () => {
     return [];
   }, [user]);
 
-  // Fetch goals for user and linked users
   const fetchGoals = useCallback(async () => {
     if (user) {
       try {
@@ -113,6 +114,18 @@ const MainHomeScreen = () => {
       }
     }
   }, [user, fetchLinkedUsers]);
+  
+  // Refresh heatmap days when goals change
+  useEffect(() => {
+    heatmapDaysRef.current = generateCalendarDaysForHeatmap();
+  }, [goals]);
+  
+  // Initialize heatmap days
+  useEffect(() => {
+    if (heatmapDaysRef.current.length === 0) {
+      heatmapDaysRef.current = generateCalendarDaysForHeatmap();
+    }
+  }, []);
 
   // Handle hardware back button
   useEffect(() => {
@@ -450,7 +463,7 @@ const MainHomeScreen = () => {
               // Mark as missed
               try {
                 const progress: GoalProgress = await updateGoalProgress(goalId, date, false, user.uid);
-                // Update local state
+                // Update local state with a new object reference to trigger re-render
                 setGoalsProgress(prev => {
                   const existingProgress = prev[goalId] || [];
                   // Filter out any existing record for this date
@@ -473,7 +486,7 @@ const MainHomeScreen = () => {
               // Mark as completed
               try {
                 const progress: GoalProgress = await updateGoalProgress(goalId, date, true, user.uid);
-                // Update local state
+                // Update local state with a new object reference to trigger re-render
                 setGoalsProgress(prev => {
                   const existingProgress = prev[goalId] || [];
                   // Filter out any existing record for this date
@@ -562,9 +575,7 @@ const MainHomeScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={globalStyles.container}>
-        <View style={[styles.headerBar, { paddingTop: insets.top > 0 ? insets.top : verticalScale(10) }]}>
-          <Text style={styles.headerText}>HabitHearts💗</Text>
-        </View>
+        
 
         <View style={styles.searchContainer}>
           <View style={styles.skeletonInput} />
@@ -621,6 +632,7 @@ const MainHomeScreen = () => {
                     onPress={() => {
                       if (user) {
                         const today = new Date();
+                        today.setHours(0, 0, 0, 0); // Normalize the time
                         Alert.alert(
                           'Daily Check-in',
                           `Did you complete "${goal.text}" today?`,
@@ -631,7 +643,7 @@ const MainHomeScreen = () => {
                                 // Mark today as missed for this goal
                                 try {
                                   const progress: GoalProgress = await updateGoalProgress(goal.id, today, false, user.uid);
-                                  // Update local state
+                                  // Update local state with a new object reference to trigger re-render
                                   setGoalsProgress(prev => {
                                     const existingProgress = prev[goal.id] || [];
                                     // Filter out any existing record for this date
@@ -654,7 +666,7 @@ const MainHomeScreen = () => {
                                 // Mark today as completed for this goal
                                 try {
                                   const progress: GoalProgress = await updateGoalProgress(goal.id, today, true, user.uid);
-                                  // Update local state
+                                  // Update local state with a new object reference to trigger re-render
                                   setGoalsProgress(prev => {
                                     const existingProgress = prev[goal.id] || [];
                                     // Filter out any existing record for this date
@@ -680,31 +692,63 @@ const MainHomeScreen = () => {
                   </TouchableOpacity>
                 </View>
                 <View style={styles.heatmapCalendar}>
-                  <View style={styles.heatmapGrid}>
-                    {generateCalendarDaysForHeatmap().map((day, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.heatmapDateCell,
-                          day.isCurrentMonth ? styles.currentMonthCell : styles.otherMonthCell,
-                          isToday(day.date) && styles.todayDateCell,
-                          getHeatmapDateColor(day.date, goal.id)
-                        ]}
-                        onPress={() => {
-                          // Handle cell press - would mark goal progress for this day
-                          handleDatePress(day.date, goal.id);
-                        }}
-                        disabled={!day.isCurrentMonth}
-                      >
-                        <Text style={[
-                          styles.heatmapDateText,
-                          day.isCurrentMonth ? styles.currentMonthDateText : styles.otherMonthDateText,
-                          isToday(day.date) && styles.todayDateText
-                        ]}>
-                          {day.day}
-                        </Text>
-                      </TouchableOpacity>
+                  {/* Days of week header */}
+                  <View style={styles.heatmapWeekDays}>
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                      <Text key={index} style={styles.heatmapWeekDayText}>
+                        {day}
+                      </Text>
                     ))}
+                  </View>
+                  <View style={styles.heatmapGrid}>
+                    {heatmapDaysRef.current.map((day, index) => {
+                      const dateStr = day.date.toISOString().split('T')[0];
+                      const goalProgress = goalsProgress[goal.id] || [];
+                      const progressRecord = goalProgress.find(p => p.date === dateStr);
+                      
+                      // Get the color style for this cell
+                      const colorStyle = getHeatmapDateColor(day.date, goal.id);
+                      
+                      return (
+                        <TouchableOpacity
+                          key={`${goal.id}-${dateStr}-${index}`}
+                          style={[
+                            styles.heatmapDateCell,
+                            day.isCurrentMonth ? styles.currentMonthCell : styles.otherMonthCell,
+                            isToday(day.date) && styles.todayDateCell,
+                            colorStyle
+                          ]}
+                          onPress={() => {
+                            // Handle cell press - would mark goal progress for this day
+                            handleDatePress(day.date, goal.id);
+                          }}
+                          disabled={!day.isCurrentMonth}
+                        >
+                          <Text style={[
+                            styles.heatmapDateText,
+                            day.isCurrentMonth ? styles.currentMonthDateText : styles.otherMonthDateText,
+                            isToday(day.date) && styles.todayDateText
+                          ]}>
+                            {day.day}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+                {/* Heatmap Legend */}
+                <View style={styles.heatmapLegend}>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendColorBox, styles.legendCompleted]} />
+                    <Text style={styles.legendText}>Completed</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendColorBox, styles.legendMissed]} />
+                    <Text style={styles.legendText}>Missed</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendColorBox, styles.legendDefault]} />
+                    <Text style={styles.legendText}>Not Marked</Text>
                   </View>
                 </View>
               </View>
@@ -1164,25 +1208,26 @@ const MainHomeScreen = () => {
 const styles = StyleSheet.create({
   headerBar: {
     backgroundColor: colors.primary,
-    paddingVertical: verticalScale(20),
+    paddingVertical: verticalScale(25),
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomLeftRadius: moderateScale(20),
-    borderBottomRightRadius: moderateScale(20),
+    borderBottomLeftRadius: moderateScale(25),
+    borderBottomRightRadius: moderateScale(25),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowRadius: 5,
+    elevation: 6,
   },
   headerText: {
     color: 'white',
-    fontSize: responsiveFontSize(24),
+    fontSize: responsiveFontSize(26),
     fontWeight: '800',
+    letterSpacing: 0.5,
   },
   heatmapContainer: {
-    paddingHorizontal: scale(10),
-    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(15),
+    paddingVertical: verticalScale(15),
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
@@ -1191,50 +1236,71 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(10),
+    marginBottom: verticalScale(15),
   },
   heatmapTitle: {
-    fontSize: responsiveFontSize(16),
-    fontWeight: '600',
-    color: 'black',
+    fontSize: responsiveFontSize(18),
+    fontWeight: '700',
+    color: colors.text,
   },
   dailyCheckButton: {
-    backgroundColor: 'black',
-    paddingHorizontal: scale(30),
-    paddingVertical: verticalScale(5),
-    borderRadius: moderateScale(5),
+    backgroundColor: colors.primary,
+    paddingHorizontal: scale(20),
+    paddingVertical: verticalScale(8),
+    borderRadius: moderateScale(20),
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   dailyCheckButtonText: {
     color: 'white',
-    fontSize: responsiveFontSize(12),
+    fontSize: responsiveFontSize(13),
     fontWeight: '600',
   },
   heatmapCarousel: {
-    height: verticalScale(305), // Increased height
+    height: verticalScale(320),
   },
   goalHeatmap: {
-    width: widthPercentage(90), // Adjusted width
+    width: widthPercentage(100),
     height: '100%',
-    paddingHorizontal: scale(10), // Added padding
+    paddingHorizontal: scale(5),
   },
   goalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(5),
+    marginBottom: verticalScale(10),
+    paddingHorizontal: scale(5),
   },
   goalName: {
-    fontSize: responsiveFontSize(14),
+    fontSize: responsiveFontSize(16),
     fontWeight: '600',
-    color: 'black',
-    maxWidth: '80%',
+    color: colors.text,
+    maxWidth: '75%',
   },
   heatmapCalendar: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: moderateScale(8),
-    padding: scale(10),
+    backgroundColor: '#f8f9fa',
+    borderRadius: moderateScale(12),
+    padding: scale(12),
     flex: 1,
-    justifyContent: 'center', // Center content vertically
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  heatmapWeekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: verticalScale(5),
+  },
+  heatmapWeekDayText: {
+    fontSize: responsiveFontSize(12),
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   heatmapGrid: {
     flexDirection: 'row',
@@ -1245,41 +1311,58 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: scale(1),
+    marginVertical: scale(2),
+    borderRadius: moderateScale(6),
   },
   currentMonthCell: {
     // No additional styling needed
   },
   otherMonthCell: {
-    // No additional styling needed
+    opacity: 0.3,
   },
   heatmapDateText: {
-    fontSize: responsiveFontSize(10),
+    fontSize: responsiveFontSize(11),
     fontWeight: '500',
   },
   currentMonthDateText: {
-    color: 'black',
+    color: colors.text,
   },
   otherMonthDateText: {
-    color: '#cccccc',
+    color: '#999999',
   },
   heatmapDateDefault: {
-    backgroundColor: '#e0e0e0', // Grey for unmarked days
+    backgroundColor: '#e9ecef', // Light grey for unmarked days
   },
   heatmapDateFuture: {
-    backgroundColor: '#f5f5f5', // Light grey for future days
+    backgroundColor: '#f8f9fa', // Very light grey for future days
   },
   heatmapDateCompleted: {
-    backgroundColor: '#4caf50', // Green
+    backgroundColor: '#4caf50', // Green for completed
+    shadowColor: '#4caf50',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   heatmapDateMissed: {
-    backgroundColor: '#f44336', // Red
+    backgroundColor: '#f44336', // Red for missed
+    shadowColor: '#f44336',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   todayDateCell: {
-    backgroundColor: 'black',
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 3,
   },
   todayDateText: {
     color: 'white',
+    fontWeight: '700',
   },
   noGoalsText: {
     fontSize: responsiveFontSize(14),
@@ -1288,28 +1371,60 @@ const styles = StyleSheet.create({
     textAlign: 'center', // Center the text
     paddingVertical: verticalScale(20), // Add some padding
   },
+  heatmapLegend: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: verticalScale(15),
+    paddingHorizontal: scale(10),
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendColorBox: {
+    width: scale(12),
+    height: scale(12),
+    borderRadius: moderateScale(2),
+    marginRight: scale(5),
+  },
+  legendCompleted: {
+    backgroundColor: '#4caf50',
+  },
+  legendMissed: {
+    backgroundColor: '#f44336',
+  },
+  legendDefault: {
+    backgroundColor: '#e9ecef',
+  },
+  legendText: {
+    fontSize: responsiveFontSize(11),
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: moderateScale(12),
+    backgroundColor: 'white',
+    borderRadius: moderateScale(15),
     marginHorizontal: scale(20),
     marginVertical: verticalScale(15),
     paddingHorizontal: scale(15),
-    paddingVertical: verticalScale(10),
+    paddingVertical: verticalScale(12),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
   searchIcon: {
-    marginRight: scale(10),
+    marginRight: scale(12),
+    color: colors.textSecondary,
   },
   searchInput: {
     flex: 1,
     fontSize: responsiveFontSize(16),
     color: colors.text,
+    fontWeight: '500',
   },
   dateNavigation: {
     flexDirection: 'row',
@@ -1319,21 +1434,21 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(15),
   },
   dateButton: {
-    width: verticalScale(40),
-    height: verticalScale(40),
-    borderRadius: moderateScale(20),
-    backgroundColor: colors.surface,
+    width: verticalScale(45),
+    height: verticalScale(45),
+    borderRadius: moderateScale(22.5),
+    backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   dateText: {
-    fontSize: responsiveFontSize(18),
-    fontWeight: '600',
+    fontSize: responsiveFontSize(19),
+    fontWeight: '700',
     color: colors.text,
   },
   taskList: {
@@ -1347,12 +1462,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: verticalScale(40),
+    paddingVertical: verticalScale(60),
   },
   taskItem: {
-    backgroundColor: colors.surface,
-    borderRadius: moderateScale(16),
-    padding: moderateScale(15),
+    backgroundColor: 'white',
+    borderRadius: moderateScale(18),
+    padding: moderateScale(18),
     marginBottom: verticalScale(12),
     flexDirection: 'row',
     alignItems: 'center',
@@ -1362,43 +1477,44 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 4,
-    elevation: 3,
-    borderLeftWidth: 4,
+    elevation: 2,
+    borderLeftWidth: 5,
     borderLeftColor: colors.primary,
   },
   taskTextContainer: {
     flex: 1,
   },
   taskText: {
-    fontSize: responsiveFontSize(16),
+    fontSize: responsiveFontSize(17),
     color: colors.text,
     fontWeight: '500',
+    lineHeight: responsiveFontSize(22),
   },
   completedTask: {
     textDecorationLine: 'line-through',
     color: colors.textSecondary,
   },
   creatorText: {
-    fontSize: responsiveFontSize(12),
+    fontSize: responsiveFontSize(13),
     color: colors.textSecondary,
-    marginTop: verticalScale(3),
+    marginTop: verticalScale(4),
     fontStyle: 'italic',
   },
   taskActions: {
     flexDirection: 'row',
   },
   actionButton: {
-    width: verticalScale(30),
-    height: verticalScale(30),
-    borderRadius: moderateScale(15),
+    width: verticalScale(36),
+    height: verticalScale(36),
+    borderRadius: moderateScale(18),
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: scale(5),
+    marginLeft: scale(8),
   },
   deleteButton: {
-    backgroundColor: colors.error,
+    backgroundColor: '#ffebee',
   },
   modalOverlay: {
     flex: 1,
@@ -1408,66 +1524,78 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     backgroundColor: 'white',
-    borderRadius: moderateScale(16),
-    width: '80%',
-    maxHeight: '80%',
+    borderRadius: moderateScale(20),
+    width: '90%',
+    maxHeight: '85%',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 5,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.34,
+    shadowRadius: 6.27,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: scale(20),
-    paddingVertical: verticalScale(15),
+    paddingVertical: verticalScale(18),
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   modalTitle: {
-    fontSize: responsiveFontSize(18),
+    fontSize: responsiveFontSize(20),
     fontWeight: '700',
-    color: 'black',
+    color: colors.text,
   },
   closeButton: {
     padding: scale(10),
   },
   saveButtonSmall: {
-    backgroundColor: 'black',
-    borderRadius: moderateScale(8),
-    paddingHorizontal: scale(15),
-    paddingVertical: verticalScale(8),
+    backgroundColor: colors.primary,
+    borderRadius: moderateScale(12),
+    paddingHorizontal: scale(20),
+    paddingVertical: verticalScale(10),
+    shadowColor: colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   saveButtonTextSmall: {
     color: 'white',
-    fontSize: responsiveFontSize(14),
+    fontSize: responsiveFontSize(15),
     fontWeight: '700',
   },
   modalContent: {
     padding: scale(20),
   },
   editTitleInput: {
-    fontSize: responsiveFontSize(18),
+    fontSize: responsiveFontSize(19),
     fontWeight: '700',
-    color: 'black',
+    color: colors.text,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    paddingVertical: verticalScale(10),
-    marginBottom: verticalScale(15),
-    minHeight: verticalScale(40),
+    paddingVertical: verticalScale(12),
+    marginBottom: verticalScale(18),
+    minHeight: verticalScale(45),
   },
   editDescriptionInput: {
-    fontSize: responsiveFontSize(14),
-    color: 'black',
+    fontSize: responsiveFontSize(15),
+    color: colors.text,
     textAlignVertical: 'top',
-    paddingVertical: verticalScale(10),
-    minHeight: verticalScale(60),
-    maxHeight: verticalScale(100),
+    paddingVertical: verticalScale(12),
+    minHeight: verticalScale(80),
+    maxHeight: verticalScale(120),
+    backgroundColor: '#f8f9fa',
+    borderRadius: moderateScale(10),
+    paddingHorizontal: scale(12),
+    marginBottom: verticalScale(15),
   },
   datePickerContainer: {
     flexDirection: 'row',
@@ -1506,16 +1634,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   saveButton: {
-    backgroundColor: colors.secondary,
-    borderRadius: moderateScale(12),
-    padding: moderateScale(15),
+    backgroundColor: colors.primary,
+    borderRadius: moderateScale(15),
+    padding: moderateScale(18),
     alignItems: 'center',
-    marginTop: verticalScale(20),
+    marginTop: verticalScale(10),
+    shadowColor: colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
   },
   saveButtonText: {
-    color: colors.textLight,
-    fontSize: responsiveFontSize(16),
+    color: 'white',
+    fontSize: responsiveFontSize(17),
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
   skeletonText: {
     height: verticalScale(16),
@@ -1534,22 +1671,22 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: verticalScale(80),
+    bottom: verticalScale(30),
     right: scale(20),
-    width: verticalScale(50),
-    height: verticalScale(50),
-    borderRadius: moderateScale(25),
+    width: verticalScale(60),
+    height: verticalScale(60),
+    borderRadius: moderateScale(30),
     backgroundColor: colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.secondary,
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
   pickerModalContainer: {
     flex: 1,
@@ -1559,18 +1696,18 @@ const styles = StyleSheet.create({
   },
   pickerModalContent: {
     backgroundColor: 'white',
-    borderRadius: moderateScale(16),
-    width: '80%',
+    borderRadius: moderateScale(20),
+    width: '90%',
     maxWidth: 400,
     padding: scale(20),
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 5,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.34,
+    shadowRadius: 6.27,
+    elevation: 10,
   },
   pickerHeader: {
     flexDirection: 'row',
@@ -1589,15 +1726,17 @@ const styles = StyleSheet.create({
   pickerActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: verticalScale(15),
+    marginTop: verticalScale(20),
   },
   pickerCancelButton: {
     flex: 1,
-    padding: moderateScale(15),
+    padding: moderateScale(16),
     alignItems: 'center',
-    marginRight: scale(10),
-    borderRadius: moderateScale(12),
-    backgroundColor: colors.border,
+    marginRight: scale(12),
+    borderRadius: moderateScale(15),
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   pickerCancelText: {
     color: colors.text,
@@ -1606,16 +1745,21 @@ const styles = StyleSheet.create({
   },
   pickerConfirmButton: {
     flex: 1,
-    padding: moderateScale(15),
+    padding: moderateScale(16),
     alignItems: 'center',
-    marginLeft: scale(10),
-    borderRadius: moderateScale(12),
-    backgroundColor: colors.secondary,
+    marginLeft: scale(12),
+    borderRadius: moderateScale(15),
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   pickerConfirmText: {
-    color: colors.textLight,
+    color: 'white',
     fontSize: responsiveFontSize(16),
-    fontWeight: '600',
+    fontWeight: '700',
   },
   customPickerContainer: {
     paddingVertical: verticalScale(20),
@@ -1669,22 +1813,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(10),
+    marginBottom: verticalScale(15),
   },
   calendarMonthYear: {
-    fontSize: responsiveFontSize(16),
-    fontWeight: '600',
-    color: 'black',
+    fontSize: responsiveFontSize(18),
+    fontWeight: '700',
+    color: colors.text,
   },
   calendarDaysHeader: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginBottom: verticalScale(10),
+    paddingVertical: verticalScale(5),
+    backgroundColor: '#f8f9fa',
+    borderRadius: moderateScale(8),
   },
   calendarDayHeader: {
     fontSize: responsiveFontSize(14),
-    fontWeight: '600',
-    color: '#666666',
+    fontWeight: '700',
+    color: colors.text,
     width: scale(30),
     textAlign: 'center',
   },
@@ -1694,73 +1841,94 @@ const styles = StyleSheet.create({
   },
   calendarDay: {
     width: '14.28%', // 100% / 7 days
-    height: scale(30),
+    height: scale(36),
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: verticalScale(2),
+    marginVertical: verticalScale(3),
+    borderRadius: moderateScale(18),
   },
   currentMonthDay: {
     // No additional styling needed
   },
   otherMonthDay: {
-    // No additional styling needed
+    opacity: 0.4,
   },
   selectedDay: {
-    backgroundColor: 'black',
-    borderRadius: scale(15),
+    backgroundColor: colors.primary,
+    borderRadius: scale(18),
   },
   calendarDayText: {
-    fontSize: responsiveFontSize(14),
+    fontSize: responsiveFontSize(15),
+    fontWeight: '600',
   },
   currentMonthDayText: {
-    color: 'black',
+    color: colors.text,
   },
   otherMonthDayText: {
-    color: '#cccccc',
+    color: '#999999',
   },
   selectedDayText: {
     color: 'white',
+    fontWeight: '700',
   },
   timePickerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: verticalScale(20),
+    paddingVertical: verticalScale(30),
+    backgroundColor: '#f8f9fa',
+    borderRadius: moderateScale(15),
+    marginVertical: verticalScale(10),
   },
   timePickerRow: {
     alignItems: 'center',
-    marginHorizontal: scale(10),
+    marginHorizontal: scale(15),
   },
   timePickerButton: {
-    padding: scale(5),
+    padding: scale(8),
+    backgroundColor: 'white',
+    borderRadius: moderateScale(20),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   timePickerValue: {
-    fontSize: responsiveFontSize(24),
-    fontWeight: '600',
-    color: 'black',
-    marginVertical: verticalScale(5),
+    fontSize: responsiveFontSize(28),
+    fontWeight: '700',
+    color: colors.text,
+    marginVertical: verticalScale(8),
+    minWidth: scale(40),
+    textAlign: 'center',
   },
   timePickerColon: {
-    fontSize: responsiveFontSize(24),
-    fontWeight: '600',
-    color: 'black',
+    fontSize: responsiveFontSize(28),
+    fontWeight: '700',
+    color: colors.text,
     marginHorizontal: scale(5),
   },
   timePickerAmPmContainer: {
     flexDirection: 'row',
-    marginLeft: scale(20),
+    marginLeft: scale(25),
   },
   timePickerAmPmButton: {
-    paddingVertical: verticalScale(5),
-    paddingHorizontal: scale(10),
-    marginHorizontal: scale(5),
-    borderRadius: moderateScale(5),
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(15),
+    marginHorizontal: scale(8),
+    borderRadius: moderateScale(10),
     borderWidth: 1,
     borderColor: '#cccccc',
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    elevation: 1,
   },
   selectedAmPmButton: {
-    backgroundColor: 'black',
-    borderColor: 'black',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   timePickerAmPmText: {
     fontSize: responsiveFontSize(16),
@@ -1769,6 +1937,7 @@ const styles = StyleSheet.create({
   },
   selectedAmPmText: {
     color: 'white',
+    fontWeight: '700',
   },
 });
 
