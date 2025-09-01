@@ -1,0 +1,170 @@
+# 📱 Couples App – Screen Flow
+
+### **Phase 1 – Onboarding & Auth**
+
+1. **Splash Screen**
+
+   * Logo + tagline.
+   * Auto-check if logged in → if yes → go to Dashboard.
+
+2. **Onboarding Slides (3–4 screens)**
+
+   * Slide 1 → “Stay connected with your partner.”
+   * Slide 2 → “Plan events, trips, and goals together.”
+   * Slide 3 → “Track memories and milestones.”
+   * CTA → *Get Started*.
+
+3. **Sign Up / Login Screen**
+
+   * Options: Email, Google, Apple.
+   * New users → *Create Profile*.
+
+4. **Profile Creation Screen**
+
+   * Upload photo, enter name, DOB, gender.
+   * System generates **6-character code** (shown on screen).
+
+---
+
+### **Phase 2 – Linking Accounts**
+
+5. **Share Code Screen**
+
+   * Show: “Your Code: U7I24Y”.
+   * Option: “Enter Partner’s Code”.
+
+6. **Link Confirmation Screen**
+
+   * Once both enter → show success animation → *“Accounts Linked!”*.
+   * Redirect to Dashboard.
+
+---
+
+### **Phase 3 – Dashboard (Home Base)**
+
+7. **Dashboard Overview Screen**
+
+   * Header: Couple Names + Profile Pics.
+   * Sections:
+
+     * **Upcoming Events (Calendar preview)**.
+     * **Tasks & Goals (short list)**.
+     * **Recent Updates (latest changes)**.
+     * Quick Add (+ button for event, task, note).
+
+---
+
+### **Phase 4 – Core Shared Features (MVP)**
+
+8. **Calendar Screen**
+
+   * Monthly/weekly view.
+   * Add events/reminders.
+   * Sync instantly between both.
+
+9. **Tasks & Goals Screen**
+
+   * Tabs: “Tasks” / “Goals”.
+   * Create to-dos, mark complete, assign to self/partner.
+
+10. **Notes & Lists Screen**
+
+* Grocery list, shopping list, random notes.
+* Check/uncheck items → instantly synced.
+
+---
+
+### **Phase 5 – Enhanced Features**
+
+11. **Ideas Board Screen**
+
+* Add date ideas, gift ideas, business ideas.
+* Option to tag ideas (personal / couple).
+
+12. **Event Planning Screen**
+
+* For birthdays, anniversaries, trips.
+* Sub-sections: guest list, budget, tasks.
+
+13. **Bucket List Screen**
+
+* Add “dream activities” → mark as done together.
+
+14. **Memory Timeline Screen**
+
+* Scrollable timeline with photos, notes, milestones.
+
+---
+
+### **Phase 6 – Engagement Features**
+
+15. **Mood Tracker Screen**
+
+* Select emoji/mood + short note.
+* Visible to partner on Dashboard.
+
+16. **Habit Tracker Screen**
+
+* Add habits (gym, reading).
+* Track progress daily/weekly.
+
+17. **Couple Challenges Screen**
+
+* Pre-made fun challenges (30-day gratitude, fitness goals).
+* Progress shown side-by-side.
+
+18. **Polls & Voting Screen**
+
+* Quick polls (e.g., “Dinner or Movie?”).
+
+---
+
+### **Phase 7 – Premium & Utility Features**
+
+19. **Finance Tracker Screen**
+
+* Add expenses, budgets.
+* Shared overview of money spent.
+
+20. **Emergency Info Screen**
+
+* Store medical info, emergency contacts.
+
+21. **Private Chat / Voice Notes Screen**
+
+* Messaging just for the couple.
+* Option for short voice notes.
+
+22. **Surprise Mode Screen**
+
+* Create hidden event/plan → reveal on chosen date.
+
+23. **Secret Wishlist Screen**
+
+* Add gift ideas.
+* Shown only as “hints” to partner.
+
+24. **Shared Journal Screen**
+
+* Private diary entries by both.
+
+---
+
+### **Phase 8 – System Enhancements**
+
+25. **Notifications Screen**
+
+* List of all recent updates:
+
+  * “Partner added event: Dinner Sunday.”
+  * “Partner completed Task: Buy groceries.”
+
+26. **Settings Screen**
+
+* Profile, privacy, subscription (for premium features).
+* Logout option.
+
+---
+
+👉 The flow is:
+**Splash → Onboarding → Auth → Profile → Linking → Dashboard → Features (Calendar, Tasks, Notes first) → Advanced Features → Premium → Settings/Notifications.**

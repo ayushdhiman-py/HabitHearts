@@ -1,9 +1,11 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 
 interface User {
+  uid: string;
   name: string;
   email: string;
   picture?: string;
+  displayName?: string;
 }
 
 interface AuthContextType {

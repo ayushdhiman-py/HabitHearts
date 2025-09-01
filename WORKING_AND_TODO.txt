@@ -1,0 +1,8 @@
+WORKING :
+- making a task creation
+
+
+TODO :
+- nice now i want that in the profile tab where users email and signout button exists there should be 2 things, an alphanumeric+symbols (alphabets, or digit or symbols only @#$)  unique code for every user which should not repeat in the future for any of the user, also i input where the user could type that 8 digit unique code of other user and when user1 enters other users unique code their app data should be linked together. like everything the linked user1 adds   
+
+DONE : 

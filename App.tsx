@@ -1,7 +1,9 @@
 import React, { useEffect } from 'react';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { auth } from './firebaseConfig';
+import { StatusBar, Platform } from 'react-native';
 
 const App = () => {
   useEffect(() => {
@@ -19,9 +21,16 @@ const App = () => {
   }, []);
 
   return (
-    <AuthProvider>
-      <AppNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <StatusBar 
+        barStyle={Platform.OS === 'ios' ? 'light-content' : 'light-content'} 
+        backgroundColor="black" 
+        translucent={false}
+      />
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 };
 
