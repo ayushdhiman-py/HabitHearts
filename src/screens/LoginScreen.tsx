@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Image, Platform } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../../firebaseConfig';
@@ -7,11 +7,11 @@ import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, widthPercentage } from '../utils/responsive';
-import Icon from 'react-native-vector-icons/FontAwesome';
 import Slideshow from '../components/Slideshow';
 
-// Import heart logo
+// Import logos
 const heartLogo = require('../../assets/images/heartlogotransparent.png');
+const googleLogo = require('../../assets/images/google-logo.png');
 
 // IMPORTANT: You must get this from your Google Cloud project
 GoogleSignin.configure({
@@ -101,10 +101,11 @@ const LoginScreen = () => {
       <Slideshow />
       <View style={styles.overlay} />
       <View style={styles.content}>
+        <Image source={heartLogo} style={styles.heartLogo} />
         <View style={styles.titleContainer}>
           <Text style={styles.title}>HabitHearts</Text>
+          {/* <Text style={styles.subtitle}>Your relationship partner</Text> */}
         </View>
-        <Text style={styles.subtitle}>Build better habits together</Text>
         
         <View style={styles.bottomContent}>
           <TouchableOpacity 
@@ -116,7 +117,7 @@ const LoginScreen = () => {
               <ActivityIndicator color={colors.textLight} size="small" />
             ) : (
               <>
-                <Icon name="google" size={responsiveFontSize(20)} color="#fff" style={styles.googleIcon} />
+                <Image source={googleLogo} style={styles.googleIcon} />
                 <Text style={[globalStyles.buttonText, styles.buttonText]}>Sign in with Google</Text>
               </>
             )}
@@ -153,11 +154,34 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: verticalScale(10),
     width: '100%',
-    marginLeft: scale(13),
+    marginLeft: scale(13), // Keep an eye on this as it might cause overflow with width: '100%'
+    borderRadius: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', // Semi-transparent white base
+
+    // Glow Effect
+    ...Platform.select({
+      ios: {
+        shadowColor: 'rgba(255, 255, 255, 0.7)', // Lighter, slightly opaque white for glow
+        shadowOffset: { width: 0, height: 0 }, // No offset for an even glow
+        shadowOpacity: 1, // Full opacity for the glow
+        shadowRadius: 15, // Increased radius for a wider, softer glow
+      },
+      android: {
+        // Android's elevation primarily adds a dark shadow.
+        // To simulate glow, we often need to overlay another view
+        // or rely on a very light background with a subtle elevation.
+        // For a true glow, you might need a custom approach like a BlurView or an image.
+        // For a basic glowing *appearance* with elevation:
+        elevation: 25, // Increase elevation to make it 'pop' more
+        shadowColor: 'rgba(255, 255, 255, 1)', // Not directly used by elevation for the glow color, but good for consistency
+      },
+    }),
+    // Optional: Add a subtle border to enhance the glowing edge, especially on Android
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)', 
   },
   title: {
     fontSize: responsiveFontSize(32),
@@ -169,17 +193,18 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   subtitle: {
-    fontSize: responsiveFontSize(18),
-    color: colors.textLight,
-    marginBottom: verticalScale(40),
+    fontSize: responsiveFontSize(16),
+    color: '#fbff00ff',
+    marginBottom: verticalScale(10),
     textAlign: 'center',
   },
   heartLogo: {
-    width: responsiveFontSize(56),
-    height: responsiveFontSize(50),
+    width: responsiveFontSize(100),
+    height: responsiveFontSize(100),
     resizeMode: 'contain',
-    position: 'relative',
-    left: scale(-6),
+    position: 'absolute',
+    bottom: scale(-40),
+    zIndex: -2,
   },
   bottomContent: {
     width: '100%',
@@ -189,17 +214,18 @@ const styles = StyleSheet.create({
   signInButton: {
     width: '100%',
     marginBottom: verticalScale(30),
-    backgroundColor: colors.primary,
+    backgroundColor: 'white',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: verticalScale(12),
   },
   googleIcon: {
-    marginRight: scale(10),
+    width: responsiveFontSize(50),
+    height: responsiveFontSize(20),
   },
   buttonText: {
-    color: colors.textLight,
+    color: 'black',
     fontWeight: '600',
   },
   description: {
