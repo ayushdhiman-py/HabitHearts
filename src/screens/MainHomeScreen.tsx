@@ -13,7 +13,8 @@ import {
   Pressable,
   BackHandler,
   Platform,
-  Animated
+  Animated,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
@@ -581,7 +582,10 @@ const MainHomeScreen = () => {
             }
           ]}
         >
-          <Text style={styles.headerText}>Habit 💞</Text>
+          <View style={styles.headerContent}>
+            <Image source={require('../../assets/images/heartlogo.png')} style={styles.headerLogo} />
+            <Text style={styles.headerText}>Habit Hearts</Text>
+          </View>
         </Animated.View>
 
         {/* Scrollable Content */}
@@ -1267,14 +1271,24 @@ const styles = StyleSheet.create({
   headerBar: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)', // Glass background
     paddingVertical: verticalScale(10),
-    alignItems: 'center',
-    justifyContent: 'center',
     // Make it absolutely positioned to float above content
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 1000,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  headerLogo: {
+    width: verticalScale(40),
+    height: verticalScale(40),
+    borderRadius: verticalScale(20), // Half of width/height to make it circular
+    marginRight: scale(10),
   },
   headerText: {
     color: '#000000', // Changed from white to black for better visibility

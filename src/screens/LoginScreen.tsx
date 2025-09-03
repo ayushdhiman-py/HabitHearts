@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../../firebaseConfig';
 import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
-import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
+import { responsiveFontSize, scale, verticalScale, widthPercentage } from '../utils/responsive';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import Slideshow from '../components/Slideshow';
+
+// Import heart logo
+const heartLogo = require('../../assets/images/heartlogotransparent.png');
 
 // IMPORTANT: You must get this from your Google Cloud project
 GoogleSignin.configure({
@@ -94,32 +98,34 @@ const LoginScreen = () => {
 
   return (
     <View style={styles.container}>
+      <Slideshow />
+      <View style={styles.overlay} />
       <View style={styles.content}>
-        <Text style={styles.title}>HabitHearts 💕</Text>
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>HabitHearts</Text>
+        </View>
         <Text style={styles.subtitle}>Build better habits together</Text>
         
-        <View style={styles.heartContainer}>
-          <Text style={styles.heartEmoji}>❤️</Text>
+        <View style={styles.bottomContent}>
+          <TouchableOpacity 
+            style={[globalStyles.button, styles.signInButton, loading && globalStyles.disabledButton]} 
+            onPress={signIn}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.textLight} size="small" />
+            ) : (
+              <>
+                <Icon name="google" size={responsiveFontSize(20)} color="#fff" style={styles.googleIcon} />
+                <Text style={[globalStyles.buttonText, styles.buttonText]}>Sign in with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          
+          <Text style={styles.description}>
+            Connect with your partner to build healthy habits together and track your progress side by side.
+          </Text>
         </View>
-        
-        <TouchableOpacity 
-          style={[globalStyles.button, styles.signInButton, loading && globalStyles.disabledButton]} 
-          onPress={signIn}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.textLight} size="small" />
-          ) : (
-            <>
-              <Icon name="google" size={responsiveFontSize(20)} color="#fff" style={styles.googleIcon} />
-              <Text style={[globalStyles.buttonText, styles.buttonText]}>Sign in with Google</Text>
-            </>
-          )}
-        </TouchableOpacity>
-        
-        <Text style={styles.description}>
-          Connect with your partner to build healthy habits together and track your progress side by side.
-        </Text>
       </View>
     </View>
   );
@@ -128,43 +134,57 @@ const LoginScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: verticalScale(50),
+    paddingBottom: verticalScale(50),
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   content: {
     width: '80%',
     maxWidth: 400,
     alignItems: 'center',
+    zIndex: 1,
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginBottom: verticalScale(10),
+    width: '100%',
+    marginLeft: scale(13),
   },
   title: {
     fontSize: responsiveFontSize(32),
-    fontWeight: 'normal',
+    fontWeight: 'bold',
     fontFamily: 'cursive',
-    color: colors.primary,
-    marginBottom: verticalScale(10),
     textAlign: 'center',
+    lineHeight: responsiveFontSize(50),
+    marginLeft: scale(-10),
+    color: '#ffffff',
   },
   subtitle: {
     fontSize: responsiveFontSize(18),
-    color: colors.textSecondary,
+    color: colors.textLight,
     marginBottom: verticalScale(40),
     textAlign: 'center',
   },
-  heartContainer: {
-    width: widthPercentage(25),
-    height: widthPercentage(25),
-    borderRadius: widthPercentage(12.5),
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: verticalScale(40),
-    borderWidth: 2,
-    borderColor: colors.primary,
+  heartLogo: {
+    width: responsiveFontSize(56),
+    height: responsiveFontSize(50),
+    resizeMode: 'contain',
+    position: 'relative',
+    left: scale(-6),
   },
-  heartEmoji: {
-    fontSize: responsiveFontSize(60),
-    color: colors.primary,
+  bottomContent: {
+    width: '100%',
+    marginTop: 'auto',
+    marginBottom: verticalScale(30),
   },
   signInButton: {
     width: '100%',
@@ -184,7 +204,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: responsiveFontSize(16),
-    color: colors.textSecondary,
+    color: colors.textLight,
     textAlign: 'center',
     lineHeight: verticalScale(24),
   },
