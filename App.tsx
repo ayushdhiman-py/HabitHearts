@@ -24,8 +24,8 @@ const App = () => {
   return (
     <SafeAreaProvider>
       <StatusBar 
-        barStyle={Platform.OS === 'ios' ? 'dark-content' : 'dark-content'} 
-        backgroundColor={colors.primary} 
+        barStyle="dark-content" 
+        backgroundColor={colors.red} 
         translucent={false}
       />
       <AuthProvider>

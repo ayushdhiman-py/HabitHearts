@@ -161,7 +161,7 @@ const GoalsScreen = () => {
   return (
     <SafeAreaView style={globalStyles.container}>
       <View style={[styles.header, { marginTop: insets.top > 0 ? insets.top : verticalScale(10) }]}>
-        <Text style={styles.title}>Your Goals 💫</Text>
+        <Text style={styles.title}>Your Goals</Text>
       </View>
       
       <View style={globalStyles.card}>
@@ -200,12 +200,14 @@ const GoalsScreen = () => {
 
 const styles = StyleSheet.create({
   header: {
-    paddingHorizontal: scale(20),
-    paddingVertical: verticalScale(15),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(12),
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   title: {
-    fontSize: responsiveFontSize(24),
-    fontWeight: '700',
+    fontSize: responsiveFontSize(22),
+    fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
   },
@@ -215,12 +217,12 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: colors.primary,
-    marginLeft: scale(10),
-    paddingHorizontal: scale(20),
+    marginLeft: scale(8),
+    paddingHorizontal: scale(16),
   },
   list: {
     flex: 1,
-    paddingHorizontal: scale(20),
+    paddingHorizontal: scale(16),
   },
   emptyList: {
     flexGrow: 1,
@@ -229,17 +231,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: verticalScale(40),
+    paddingVertical: verticalScale(32),
   },
   goalItem: {
-    backgroundColor: colors.white,
-    borderRadius: moderateScale(16),
-    padding: moderateScale(16),
-    marginBottom: verticalScale(12),
+    backgroundColor: colors.surface,
+    borderRadius: moderateScale(12),
+    padding: moderateScale(12),
+    marginBottom: verticalScale(8),
     flexDirection: 'row',
     alignItems: 'center',
-    borderLeftWidth: 4,
+    borderLeftWidth: 3,
     borderLeftColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   completedGoalItem: {
     borderLeftColor: colors.border,
@@ -249,7 +253,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   goalText: {
-    fontSize: responsiveFontSize(16),
+    fontSize: responsiveFontSize(15),
     color: colors.text,
     fontWeight: '500',
   },
@@ -258,9 +262,9 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   creatorText: {
-    fontSize: responsiveFontSize(12),
+    fontSize: responsiveFontSize(11),
     color: colors.textSecondary,
-    marginTop: verticalScale(3),
+    marginTop: verticalScale(2),
     fontStyle: 'italic',
   },
   goalActions: {
@@ -268,12 +272,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionButton: {
-    width: verticalScale(30),
-    height: verticalScale(30),
-    borderRadius: moderateScale(15),
+    width: verticalScale(28),
+    height: verticalScale(28),
+    borderRadius: moderateScale(14),
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: scale(5),
+    marginLeft: scale(4),
   },
   editButton: {
     backgroundColor: colors.primary,
@@ -282,7 +286,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
   },
   actionButtonText: {
-    fontSize: responsiveFontSize(14),
+    fontSize: responsiveFontSize(12),
   },
 });
 

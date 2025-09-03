@@ -32,24 +32,23 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: moderateScale(15),
-    marginHorizontal: scale(20),
-    marginVertical: verticalScale(10),
-    paddingHorizontal: scale(15),
-    paddingVertical: verticalScale(10),
+    backgroundColor: colors.surface,
+    borderRadius: moderateScale(8),
+    marginHorizontal: scale(16),
+    marginVertical: verticalScale(8),
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
     borderWidth: 1,
-    borderColor: colors.white,
+    borderColor: colors.border,
   },
   searchIcon: {
-    marginRight: scale(12),
+    marginRight: scale(8),
     color: colors.textSecondary,
   },
   searchInput: {
     flex: 1,
     fontSize: responsiveFontSize(16),
     color: colors.text,
-    fontWeight: '500',
   },
 });
 

@@ -1,30 +1,39 @@
 export default {
-  // Purple palette
-  purpleLight: '#E6E6FA',    // Light purple (Lavender)
-  purple: '#9370DB',         // Medium purple (Medium Purple)
-  purpleDark: '#4B0082',     // Dark purple (Indigo)
-  white: '#FFFFFF',          // Pure white
-  black: '#000000',          // Pure black
+  // Modern minimal color palette
+  primary: '#6200EE',        // Deep purple (Material design primary)
+  primaryLight: '#BB86FC',   // Light purple (Material design primary variant)
+  primaryDark: '#3700B3',    // Darker purple
+  secondary: '#03DAC6',      // Teal (Material design secondary)
+  secondaryLight: '#66FFF8', // Light teal
+  secondaryDark: '#018786',  // Darker teal
+  background: '#FFFFFF',     // Clean white background
+  surface: '#FFFFFF',        // White surface
+  error: '#B00020',          // Standard error red
+  success: '#4CAF50',        // Standard success green
+  warning: '#FF9800',        // Standard warning orange
+  info: '#2196F3',           // Standard info blue
 
-  // Additional color properties for UI components
-  primary: '#9370DB',        // Medium purple as primary
-  primaryDark: '#4B0082',    // Dark purple
-  primaryLight: '#E6E6FA',   // Light purple
-  secondary: '#9370DB',      // Same as primary for consistency
-  secondaryDark: '#4B0082',  // Dark purple
-  secondaryLight: '#E6E6FA', // Light purple
-  tertiary: '#9370DB',       // Same as primary for consistency
-  tertiaryDark: '#4B0082',   // Dark purple
-  tertiaryLight: '#E6E6FA',  // Light purple
-  success: '#9370DB',        // Purple for success
-  warning: '#9370DB',        // Purple for warning
-  error: '#4B0082',          // Dark purple for error
-  info: '#9370DB',           // Purple for info
-  background: '#FFFFFF',     // Always white background
-  surface: '#E6E6FA',        // Light purple as surface
-  text: '#000000',           // Always black text
-  textSecondary: '#4B0082',  // Dark purple for secondary text
-  textLight: '#FFFFFF',      // White text for dark backgrounds
-  textDark: '#000000',       // Black text for light backgrounds
-  border: '#000000',         // Black border
+  // Text colors
+  text: '#212121',           // Primary text (dark grey)
+  textSecondary: '#757575',  // Secondary text (medium grey)
+  textLight: '#FFFFFF',      // Light text (white)
+  textDark: '#000000',       // Dark text (black)
+
+  // Border and divider
+  border: '#E0E0E0',         // Light grey border
+  divider: '#EEEEEE',        // Very light grey divider
+
+  // Neutral colors
+  white: '#FFFFFF',
+  black: '#000000',
+  grey50: '#FAFAFA',
+  grey100: '#F5F5F5',
+  grey200: '#EEEEEE',
+  grey300: '#E0E0E0',
+  grey400: '#BDBDBD',
+  grey500: '#9E9E9E',
+  grey600: '#757575',
+  grey700: '#616161',
+  grey800: '#424242',
+  grey900: '#212121',
 };

@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import colors from '../../theme/colors';
-import { responsiveFontSize, scale, verticalScale, moderateScale } from '../../utils/responsive';
+import { responsiveFontSize, scale, verticalScale } from '../../utils/responsive';
 import { Task } from '../../services/taskService';
 
 interface TaskItemProps {
@@ -32,13 +32,13 @@ const TaskItem: React.FC<TaskItemProps> = ({ item, user, onOpenTaskDetail, onDel
         )}
       </View>
       <TouchableOpacity
-        style={[styles.actionButton, styles.deleteButton]}
+        style={styles.deleteButton}
         onPress={(e) => {
           e.stopPropagation();
           onDeleteTask(item.id);
         }}
       >
-        <Icon name="delete" size={responsiveFontSize(18)} color={colors.textLight} />
+        <Icon name="delete" size={responsiveFontSize(18)} color={colors.textSecondary} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -46,24 +46,24 @@ const TaskItem: React.FC<TaskItemProps> = ({ item, user, onOpenTaskDetail, onDel
 
 const styles = StyleSheet.create({
   taskItem: {
-    backgroundColor: colors.white,
-    borderRadius: moderateScale(18),
-    padding: moderateScale(18),
-    marginBottom: verticalScale(12),
+    backgroundColor: colors.surface,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: scale(16),
+    marginBottom: verticalScale(8),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderLeftWidth: 5,
-    borderLeftColor: colors.primary,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   taskTextContainer: {
     flex: 1,
     marginRight: scale(10),
   },
   taskText: {
-    fontSize: responsiveFontSize(17),
+    fontSize: responsiveFontSize(16),
     color: colors.text,
-    fontWeight: '500',
     lineHeight: responsiveFontSize(22),
   },
   completedTask: {
@@ -71,24 +71,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   creatorText: {
-    fontSize: responsiveFontSize(13),
+    fontSize: responsiveFontSize(12),
     color: colors.textSecondary,
-    marginTop: verticalScale(4),
-    fontStyle: 'italic',
-  },
-  taskActions: {
-    flexDirection: 'row',
-  },
-  actionButton: {
-    width: verticalScale(36),
-    height: verticalScale(36),
-    borderRadius: moderateScale(18),
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: scale(8),
+    marginTop: verticalScale(2),
   },
   deleteButton: {
-    backgroundColor: colors.primaryLight,
+    padding: scale(4),
   },
 });
 

@@ -122,7 +122,7 @@ const ProfileScreen = () => {
     <SafeAreaView style={globalStyles.container}>
       <ScrollView style={globalStyles.flex1}>
         <View style={[styles.header, { marginTop: insets.top > 0 ? insets.top : verticalScale(10) }]}>
-          <Text style={styles.title}>Profile 👥</Text>
+          <Text style={styles.title}>Profile</Text>
         </View>
         
         {loading ? (
@@ -224,12 +224,14 @@ const ProfileScreen = () => {
 
 const styles = StyleSheet.create({
   header: {
-    paddingHorizontal: scale(20),
-    paddingVertical: verticalScale(15),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(12),
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   title: {
-    fontSize: responsiveFontSize(24),
-    fontWeight: '700',
+    fontSize: responsiveFontSize(22),
+    fontWeight: '600',
     textAlign: 'center',
     color: colors.text,
   },
@@ -237,59 +239,59 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: verticalScale(40),
+    paddingVertical: verticalScale(32),
   },
   loadingText: {
-    marginTop: verticalScale(10),
-    fontSize: responsiveFontSize(16),
+    marginTop: verticalScale(8),
+    fontSize: responsiveFontSize(15),
     color: colors.textSecondary,
   },
   profileInfo: {
     alignItems: 'center',
-    paddingVertical: verticalScale(20),
+    paddingVertical: verticalScale(16),
   },
   avatar: {
-    width: widthPercentage(25),
-    height: widthPercentage(25),
-    borderRadius: widthPercentage(12.5),
+    width: widthPercentage(20),
+    height: widthPercentage(20),
+    borderRadius: widthPercentage(10),
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: verticalScale(20),
+    marginBottom: verticalScale(16),
   },
   avatarText: {
-    fontSize: responsiveFontSize(40),
+    fontSize: responsiveFontSize(32),
     color: colors.textLight,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   name: {
-    fontSize: responsiveFontSize(22),
-    fontWeight: '700',
+    fontSize: responsiveFontSize(20),
+    fontWeight: '600',
     color: colors.text,
-    marginBottom: verticalScale(10),
+    marginBottom: verticalScale(8),
   },
   email: {
-    fontSize: responsiveFontSize(16),
+    fontSize: responsiveFontSize(15),
     color: colors.textSecondary,
   },
   codeContainer: {
-    backgroundColor: colors.surface,
-    padding: moderateScale(20),
-    borderRadius: moderateScale(16),
+    backgroundColor: colors.primary,
+    padding: moderateScale(16),
+    borderRadius: moderateScale(8),
     alignItems: 'center',
-    marginBottom: verticalScale(15),
+    marginBottom: verticalScale(12),
   },
   codeText: {
-    fontSize: responsiveFontSize(28),
-    fontWeight: '800',
+    fontSize: responsiveFontSize(24),
+    fontWeight: '600',
     color: colors.textLight,
-    letterSpacing: 3,
+    letterSpacing: 2,
   },
   codeDescription: {
-    fontSize: responsiveFontSize(14),
+    fontSize: responsiveFontSize(13),
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: verticalScale(20),
+    lineHeight: verticalScale(18),
   },
   linkContainer: {
     flexDirection: 'row',
@@ -297,57 +299,57 @@ const styles = StyleSheet.create({
   },
   linkButton: {
     backgroundColor: colors.primary,
-    marginLeft: scale(10),
-    paddingHorizontal: scale(20),
+    marginLeft: scale(8),
+    paddingHorizontal: scale(16),
   },
   linkedUserItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: verticalScale(15),
+    paddingVertical: verticalScale(12),
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.divider,
   },
   linkedUserInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   linkedUserAvatar: {
-    width: verticalScale(50),
-    height: verticalScale(50),
-    borderRadius: verticalScale(25),
+    width: verticalScale(40),
+    height: verticalScale(40),
+    borderRadius: verticalScale(20),
     backgroundColor: colors.secondary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: scale(15),
+    marginRight: scale(12),
   },
   linkedUserAvatarText: {
-    fontSize: responsiveFontSize(20),
+    fontSize: responsiveFontSize(16),
     color: colors.textLight,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   linkedUserName: {
-    fontSize: responsiveFontSize(16),
-    fontWeight: '700',
+    fontSize: responsiveFontSize(15),
+    fontWeight: '600',
     color: colors.text,
   },
   linkedUserCode: {
-    fontSize: responsiveFontSize(12),
+    fontSize: responsiveFontSize(11),
     color: colors.textSecondary,
-    marginTop: verticalScale(3),
+    marginTop: verticalScale(2),
   },
   heartIcon: {
-    width: verticalScale(30),
-    height: verticalScale(30),
+    width: verticalScale(24),
+    height: verticalScale(24),
     justifyContent: 'center',
     alignItems: 'center',
   },
   heartEmoji: {
-    fontSize: responsiveFontSize(20),
+    fontSize: responsiveFontSize(16),
   },
   buttonContainer: {
-    marginHorizontal: scale(20),
-    marginVertical: verticalScale(30),
+    marginHorizontal: scale(16),
+    marginVertical: verticalScale(24),
   },
   signOutButton: {
     backgroundColor: colors.error,

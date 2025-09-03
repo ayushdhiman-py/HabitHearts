@@ -195,66 +195,69 @@ const Heatmap: React.FC<HeatmapProps> = ({
 
 const styles = StyleSheet.create({
   heatmapContainer: {
-    paddingHorizontal: scale(15),
-    paddingVertical: verticalScale(15),
-    backgroundColor: 'white',
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(12),
+    backgroundColor: colors.surface,
   },
   heatmapHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(15),
+    marginBottom: verticalScale(12),
   },
   heatmapTitle: {
     fontSize: responsiveFontSize(18),
-    fontWeight: '700',
-    color: colors.black,
+    fontWeight: '600',
+    color: colors.text,
   },
   dailyCheckButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: scale(12),
     paddingVertical: verticalScale(6),
-    borderRadius: moderateScale(20),
+    borderRadius: moderateScale(16),
   },
   dailyCheckButtonText: {
-    color: '#FFFFFF', // Always white
+    color: colors.textLight,
     fontSize: responsiveFontSize(12),
-    fontWeight: '700',
+    fontWeight: '600',
   },
   goalHeatmapContainer: {
     width: '100%',
-    marginBottom: verticalScale(15),
+    marginBottom: verticalScale(12),
   },
   goalHeatmap: {
-    borderRadius: moderateScale(15),
-    padding: scale(10),
+    borderRadius: moderateScale(12),
+    padding: scale(12),
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   goalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: verticalScale(8),
   },
   goalName: {
     fontSize: responsiveFontSize(16),
-    fontWeight: '700',
+    fontWeight: '600',
     maxWidth: '65%',
   },
   heatmapCalendar: {
-    borderRadius: moderateScale(12),
-    paddingHorizontal: scale(10),
-    paddingTop: scale(10),
-    backgroundColor: '#f8f9fa',
+    borderRadius: moderateScale(8),
+    paddingHorizontal: scale(8),
+    paddingTop: scale(8),
+    backgroundColor: colors.grey100,
   },
   heatmapWeekDays: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: verticalScale(2),
-    paddingHorizontal: scale(5),
+    marginBottom: verticalScale(4),
+    paddingHorizontal: scale(4),
   },
   heatmapWeekDayText: {
     fontSize: responsiveFontSize(12),
     fontWeight: '600',
-    color: '#FFFFFF', // Always white
+    color: colors.textLight,
     width: '14.28%',
     textAlign: 'center',
   },
@@ -262,7 +265,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: verticalScale(5),
+    marginTop: verticalScale(4),
   },
   heatmapDateCell: {
     width: '14.28%', // 100% / 7 days
@@ -270,61 +273,60 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: scale(1),
-    borderRadius: moderateScale(8),
-    backgroundColor: '#FFFFFF', // Always white
+    borderRadius: moderateScale(4),
+    backgroundColor: colors.surface,
   },
   currentMonthCell: {
     // No additional styling needed
   },
   otherMonthCell: {
-    opacity: 0.3,
+    opacity: 0.4,
   },
   heatmapDateText: {
-    fontSize: responsiveFontSize(11),
+    fontSize: responsiveFontSize(10),
     fontWeight: '500',
-    color: '#000000', // Always black
+    color: colors.text,
   },
   currentMonthDateText: {
-    // No additional styling needed, using default black
+    // No additional styling needed
   },
   otherMonthDateText: {
-    color: '#999999', // Lighter gray for other months
+    color: colors.textSecondary,
   },
   heatmapDateDefault: {
-    backgroundColor: '#e9ecef', // Light grey for unmarked days
+    backgroundColor: colors.grey200,
   },
   heatmapDateFuture: {
-    backgroundColor: '#f8f9fa', // Very light grey for future days
+    backgroundColor: colors.grey100,
   },
   heatmapDateCompleted: {
-    backgroundColor: '#4caf50', // Green for completed
+    backgroundColor: colors.success,
   },
   heatmapDateMissed: {
-    backgroundColor: '#f44336', // Red for missed
+    backgroundColor: colors.error,
   },
   todayDateCell: {
     backgroundColor: colors.primary,
-    // Removed border styling
   },
   todayDateText: {
-    color: colors.white,
-    fontWeight: '700',
+    color: colors.textLight,
+    fontWeight: '600',
   },
   noGoalsText: {
     fontSize: responsiveFontSize(14),
-    color: '#666666',
+    color: colors.textSecondary,
     fontStyle: 'italic',
     textAlign: 'center',
-    paddingVertical: verticalScale(20),
+    paddingVertical: verticalScale(16),
   },
   heatmapLegend: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: verticalScale(10),
-    paddingHorizontal: scale(5),
-    backgroundColor: 'rgba(255, 255, 255, 0.7)', // Semi-transparent white background for better contrast
-    borderRadius: moderateScale(8),
-    paddingVertical: verticalScale(5),
+    marginTop: verticalScale(12),
+    paddingHorizontal: scale(8),
+    backgroundColor: colors.grey100,
+    borderRadius: moderateScale(6),
+    paddingVertical: verticalScale(6),
   },
   legendItem: {
     flexDirection: 'row',
@@ -337,17 +339,17 @@ const styles = StyleSheet.create({
     marginRight: scale(5),
   },
   legendCompleted: {
-    backgroundColor: '#4caf50',
+    backgroundColor: colors.success,
   },
   legendMissed: {
-    backgroundColor: '#f44336',
+    backgroundColor: colors.error,
   },
   legendDefault: {
-    backgroundColor: '#e9ecef',
+    backgroundColor: colors.grey200,
   },
   legendText: {
     fontSize: responsiveFontSize(11),
-    color: colors.text, // Use theme text color
+    color: colors.text,
     fontWeight: '500',
   },
 });

@@ -23,7 +23,7 @@ const LoginScreen = () => {
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const signIn = async () => {
+  const signIn = async (retryCount = 0) => {
     try {
       setLoading(true);
       console.log('Attempting to check Play Services...');
@@ -59,6 +59,14 @@ const LoginScreen = () => {
       
       console.log('User successfully signed in to Firebase');
     } catch (error: any) {
+      // Handle "activity is null" error with retry mechanism
+      if (error?.message && error.message.includes('activity is null') && retryCount < 2) {
+        console.log(`Retrying sign in (attempt ${retryCount + 1})...`);
+        setTimeout(() => {
+          signIn(retryCount + 1);
+        }, 1000);
+        return;
+      }
       // It's crucial to log the error for debugging
       console.log('Google Sign-In Error:', error);
       console.log('Error type:', typeof error);
@@ -70,26 +78,50 @@ const LoginScreen = () => {
       if (error?.code === statusCodes.SIGN_IN_CANCELLED) {
         // This is not really an error, the user just cancelled the process
       } else if (error?.code === statusCodes.IN_PROGRESS) {
-        setTimeout(() => {
-          Alert.alert('In Progress', 'Google Sign-In is already in progress.');
-        }, 100);
+        // Use a fallback alert mechanism for Android
+        try {
+          setTimeout(() => {
+            Alert.alert('In Progress', 'Google Sign-In is already in progress.');
+          }, 100);
+        } catch (alertError) {
+          console.log('Alert error:', alertError);
+          // Fallback to console logging
+        }
       } else if (error?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        setTimeout(() => {
-          Alert.alert('Play Services Error', 'Google Play Services is not available or outdated on this device.');
-        }, 100);
+        try {
+          setTimeout(() => {
+            Alert.alert('Play Services Error', 'Google Play Services is not available or outdated on this device.');
+          }, 100);
+        } catch (alertError) {
+          console.log('Alert error:', alertError);
+        }
       } else if (error?.message && error.message.includes('Network request failed')) {
-        setTimeout(() => {
-          Alert.alert('Network Error', 'Could not connect to the authentication service.');
-        }, 100);
+        try {
+          setTimeout(() => {
+            Alert.alert('Network Error', 'Could not connect to the authentication service.');
+          }, 100);
+        } catch (alertError) {
+          console.log('Alert error:', alertError);
+        }
       } else if (error?.message && error.message.includes('activity is null')) {
-        setTimeout(() => {
-          Alert.alert('Sign-In Error', 'There was an issue with the sign-in process. Please try again.');
-        }, 100);
+        try {
+          setTimeout(() => {
+            Alert.alert('Sign-In Error', 'There was an issue with the sign-in process. Please try again.');
+          }, 100);
+        } catch (alertError) {
+          console.log('Alert error:', alertError);
+        }
       } else {
         // Some other error happened
-        setTimeout(() => {
-          Alert.alert('Google Sign-In Error', `An unexpected error occurred: ${errorMessage}. Check the Metro console for the full error message.`);
-        }, 100);
+        try {
+          setTimeout(() => {
+            Alert.alert('Google Sign-In Error', `An unexpected error occurred: ${errorMessage}. Check the Metro console for the full error message.`);
+          }, 100);
+        } catch (alertError) {
+          console.log('Alert error:', alertError);
+          // Fallback to console logging
+          console.log('Google Sign-In Error (fallback):', errorMessage);
+        }
       }
     } finally {
       setLoading(false);
