@@ -139,7 +139,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: responsiveFontSize(32),
-    fontWeight: '800',
+    fontWeight: 'normal',
+    fontFamily: 'cursive',
     color: colors.primary,
     marginBottom: verticalScale(10),
     textAlign: 'center',
@@ -158,11 +159,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: verticalScale(40),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
     borderWidth: 2,
     borderColor: colors.primary,
   },
@@ -173,7 +169,7 @@ const styles = StyleSheet.create({
   signInButton: {
     width: '100%',
     marginBottom: verticalScale(30),
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -183,7 +179,7 @@ const styles = StyleSheet.create({
     marginRight: scale(10),
   },
   buttonText: {
-    color: '#fff',
+    color: colors.textLight,
     fontWeight: '600',
   },
   description: {
@@ -194,4 +190,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LoginScreen
+export default LoginScreen;

@@ -354,9 +354,6 @@ const CalendarScreen = () => {
       <View style={[styles.eventItem, !isOwnEvent && styles.sharedEventItem]}>
         <View style={styles.eventHeader}>
           <Text style={styles.eventTitle}>{item.title}</Text>
-          {item.createdBy !== user.uid && (
-            <Text style={styles.creatorTag}>Shared</Text>
-          )}
         </View>
         <Text style={styles.eventDate}>{eventDate.toLocaleDateString()}</Text>
         {item.creatorName && item.createdBy !== user.uid && (
@@ -365,6 +362,9 @@ const CalendarScreen = () => {
         <TouchableOpacity onPress={() => handleDeleteEvent(item.id)} style={styles.deleteButton}>
           <Text style={styles.deleteButtonText}>×</Text>
         </TouchableOpacity>
+        {item.createdBy !== user.uid && (
+          <Text style={styles.creatorTag}>Shared</Text>
+        )}
       </View>
     );
   };
@@ -492,11 +492,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   navButtonText: {
     fontSize: responsiveFontSize(24),
@@ -513,14 +508,6 @@ const styles = StyleSheet.create({
     marginHorizontal: scale(20),
     borderRadius: moderateScale(16),
     padding: moderateScale(16),
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
   calendarHeader: {
     flexDirection: 'row',
@@ -577,7 +564,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   sharedEventIndicator: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.primary,
   },
   eventCountText: {
     fontSize: responsiveFontSize(10),
@@ -609,23 +596,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eventItem: {
-    backgroundColor: colors.surface,
-    padding: moderateScale(16),
+    backgroundColor: 'white',
     borderRadius: moderateScale(16),
+    padding: moderateScale(16),
     marginBottom: verticalScale(12),
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
     borderLeftWidth: 4,
-    borderLeftColor: colors.tertiary,
+    borderLeftColor: colors.primary,
   },
   sharedEventItem: {
-    borderLeftColor: colors.secondary,
+    borderLeftColor: colors.primary,
   },
   eventHeader: {
     flexDirection: 'row',
@@ -648,6 +627,9 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(10),
     overflow: 'hidden',
     fontWeight: '700',
+    position: 'absolute',
+    bottom: moderateScale(16),
+    right: moderateScale(16),
   },
   eventDate: {
     fontSize: responsiveFontSize(14),
@@ -666,7 +648,7 @@ const styles = StyleSheet.create({
     width: verticalScale(24),
     height: verticalScale(24),
     borderRadius: verticalScale(12),
-    backgroundColor: '#ffebee',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -683,7 +665,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
     backgroundColor: colors.surface,
@@ -691,11 +672,6 @@ const styles = StyleSheet.create({
     padding: moderateScale(20),
     width: '80%',
     maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 10,
   },
   modalTitle: {
     fontSize: responsiveFontSize(18),

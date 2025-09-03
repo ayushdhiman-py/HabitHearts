@@ -1,91 +1,99 @@
-# HabitHearts 💕
+# HabitHearts 💕  
 
-A couple-centered habit tracking app that helps partners build healthy habits together.
+A vibrant, balanced, and minimal couple-centered habit tracking app that helps partners grow together with energy and joy.  
 
-## Overview
+## Overview  
 
-HabitHearts is a beautifully designed mobile application that allows couples to:
-- Track daily habits and tasks together
-- Share calendar events and important dates
-- Set and achieve goals as a team
-- Connect with their partner through a unique linking system
+HabitHearts is a modern mobile app that allows couples to:  
+- Track daily habits and tasks together  
+- Share calendar events and special days  
+- Set and achieve goals as a team  
+- Stay connected through a playful linking system  
+- No borders and no border colors on any buttons  
 
-## Key Features
+## Key Features  
 
-### 🏠 Home Screen
-- Personalized greeting with your name
-- Upcoming shared events display
-- Collaborative task management
-- Visual indicators for tasks created by you or your partner
+### 🏠 Home Screen  
+- Bright, welcoming greeting with your name  
+- Upcoming events at a quick glance  
+- Team-style task management  
+- Strong, balanced color tags for who created what  
 
-### 📅 Calendar
-- Month view calendar with event indicators
-- Color-coded events (pink for personal, green for shared)
-- Easy event creation with modal interface
-- Upcoming events list for the current month
+### 📅 Calendar  
+- Smooth month view with flat design  
+- Vibrant-coded events with dedicated palette  
+- Quick add event with clean modal  
+- Clear list of upcoming events with bold accents  
 
-### 🎯 Goals
-- Shared goal setting and tracking
-- Visual progress indicators
-- Collaborative goal management
+### 🎯 Goals  
+- Shared goal setting with flat progress rings  
+- Balanced vibrant progress bars  
+- Easy collaboration with dynamic visuals  
 
-### 👥 Profile
-- Personal profile information
-- Unique linking code to connect with your partner
-- Partner linking system
-- List of connected partners
+### 👥 Profile  
+- Personal profile with lively accents  
+- Unique linking code to connect with partner  
+- Simple partner linking flow  
+- Partner list with bold highlights  
 
-## Design Improvements
+## Design Language  
 
-We've enhanced the app with a more aesthetically pleasing, couple-centered design:
+We’ve reimagined HabitHearts with a **Gen-Z inspired modern + vibrant design**:  
 
-### Color Scheme
-- Soft pink (`#FF6B9D`) as the primary color representing love and connection
-- Clean white surfaces with subtle shadows for depth
-- Warm background tones for a cozy feel
-- Green accents for shared/collaborative features
+### Color Scheme 🌈  
+The app uses **only these colors**: with their names give by me from A-K
+- `#00809D` (A) – Teal, blue-green medium
+- `#FCF8DD` (B) – Cream, yellow but very light
+- `#FFD700` (C) – Gold, yellow but bright
+- `#D3AF37` (D) – Goldenrod, yellow but muted
+- `#FFB4B4` (E) – Baby Pink, red but light
+- `#E14434` (F) – Vermilion, red but orange-toned
+- `#B0DB9C` (G) – Mint Green, green but light
+- `#FF9149` (H) – Coral, orange but soft
+- `#FFFFFF` (I) – White, pure neutral
+- `#000000` (J) – Black, pure neutral
+- `#4A102A` (K) – Burgundy, red but very dark purple-toned
 
-### UI Components
-- Modern card-based design with rounded corners
-- Consistent spacing and typography
-- Improved button styles with better feedback
-- Enhanced loading states with skeleton screens
-- Visual indicators for shared vs personal items
+### UI Components 🎨  
+- Flat rounded cards (no borders)  
+- Smooth transitions and crisp micro-animations  
+- Buttons with solid fills from palette & bold text  
+- Shared vs personal indicators with strong color tags from palette  
 
-### Navigation
-- Custom tab bar with heart-themed icons
-- Improved visual hierarchy
-- Better touch targets for mobile use
+### Navigation ❤️  
+- Floating tab bar with icons in palette accents  
+- Bold hierarchy with large headings and clear text  
+- Comfortable touch zones for easy interaction  
 
-## Technical Implementation
+## Technical Implementation  
 
-### Theme System
-The app uses a centralized theme system:
-- `src/theme/colors.ts` - Color palette
-- `src/theme/styles.ts` - Common styles and components
+### Theme System  
+Centralized theme for consistent colors and vibes:  
+- `src/theme/colors.ts` – palette strictly limited to provided colors  
+- `src/theme/styles.ts` – glassy, flat, borderless component styles  
 
-### Screens
-Each screen has been redesigned with:
-- Consistent styling using the theme
-- Better organization of components
-- Improved user feedback (loading states, disabled buttons)
-- Enhanced visual hierarchy
+### Screens  
+Every screen has:  
+- Vibrant palette inspired layouts  
+- Clear hierarchy with bold visuals  
+- Micro feedback (haptics, crisp animations)  
+- Consistent, flat layouts with glass accents  
 
-## Getting Started
+## Getting Started  
 
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Configure Firebase and Google Sign-In
-4. Run the app: `npx react-native run-android` or `npx react-native run-ios`
+1. Clone repo  
+2. Install dependencies: `npm install`  
+3. Configure Firebase + Google Sign-In  
+4. Run: `npx react-native run-android` or `npx react-native run-ios`  
 
-## Contributing
+## Contributing  
 
-Feel free to contribute to the project by:
-1. Forking the repository
-2. Creating a feature branch
-3. Making your changes
-4. Submitting a pull request
+You can add your spark:  
+1. Fork repo  
+2. Create feature branch  
+3. Push changes  
+4. Open PR  
 
-## License
+## License  
 
-This project is licensed under the MIT License.
+MIT License ⚡  

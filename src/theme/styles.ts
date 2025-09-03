@@ -18,11 +18,6 @@ export default StyleSheet.create({
     paddingHorizontal: scale(20),
     paddingVertical: verticalScale(15),
     backgroundColor: colors.surface,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   headerTitle: {
     fontSize: responsiveFontSize(20),
@@ -30,16 +25,11 @@ export default StyleSheet.create({
     color: colors.text,
   },
   card: {
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.surface,
     borderRadius: moderateScale(16),
     padding: moderateScale(20),
     marginHorizontal: scale(20),
     marginVertical: verticalScale(10),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
   },
   sectionTitle: {
     fontSize: responsiveFontSize(18),
@@ -77,7 +67,7 @@ export default StyleSheet.create({
     backgroundColor: colors.tertiary,
   },
   purpleButton: {
-    backgroundColor: colors.purple,
+    backgroundColor: colors.secondaryDark,
   },
   outlineButton: {
     backgroundColor: 'transparent',

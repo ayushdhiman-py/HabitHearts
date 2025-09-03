@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButton: {
-    backgroundColor: colors.tertiary,
+    backgroundColor: colors.primary,
     marginLeft: scale(10),
     paddingHorizontal: scale(20),
   },
@@ -232,23 +232,14 @@ const styles = StyleSheet.create({
     paddingVertical: verticalScale(40),
   },
   goalItem: {
-    backgroundColor: colors.surface,
-    padding: moderateScale(15),
+    backgroundColor: colors.white,
     borderRadius: moderateScale(16),
+    padding: moderateScale(16),
     marginBottom: verticalScale(12),
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 2,
     borderLeftWidth: 4,
-    borderLeftColor: colors.tertiary,
+    borderLeftColor: colors.primary,
   },
   completedGoalItem: {
     borderLeftColor: colors.border,
@@ -285,7 +276,7 @@ const styles = StyleSheet.create({
     marginLeft: scale(5),
   },
   editButton: {
-    backgroundColor: colors.purple,
+    backgroundColor: colors.primary,
   },
   deleteButton: {
     backgroundColor: colors.error,

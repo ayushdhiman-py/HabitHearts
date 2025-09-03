@@ -256,11 +256,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: verticalScale(20),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
   },
   avatarText: {
     fontSize: responsiveFontSize(40),
@@ -278,16 +273,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   codeContainer: {
-    backgroundColor: colors.gradientStart,
+    backgroundColor: colors.surface,
     padding: moderateScale(20),
     borderRadius: moderateScale(16),
     alignItems: 'center',
     marginBottom: verticalScale(15),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   codeText: {
     fontSize: responsiveFontSize(28),
@@ -306,7 +296,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkButton: {
-    backgroundColor: colors.tertiary,
+    backgroundColor: colors.primary,
     marginLeft: scale(10),
     paddingHorizontal: scale(20),
   },

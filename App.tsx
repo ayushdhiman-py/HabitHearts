@@ -4,6 +4,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { auth } from './firebaseConfig';
 import { StatusBar, Platform } from 'react-native';
+import colors from './src/theme/colors';
 
 const App = () => {
   useEffect(() => {
@@ -23,8 +24,8 @@ const App = () => {
   return (
     <SafeAreaProvider>
       <StatusBar 
-        barStyle={Platform.OS === 'ios' ? 'light-content' : 'light-content'} 
-        backgroundColor="black" 
+        barStyle={Platform.OS === 'ios' ? 'dark-content' : 'dark-content'} 
+        backgroundColor={colors.primary} 
         translucent={false}
       />
       <AuthProvider>
