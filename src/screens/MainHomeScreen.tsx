@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,10 @@ import {
   BackHandler,
   Platform,
   Animated,
-  Image
+  Image,
+  InteractionManager
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToTasksForUserAndLinked, createTask, updateTask, deleteTask, toggleTaskCompletion, Task } from '../services/taskService';
 import { getLinkedUsers, User as UserServiceUser } from '../services/userService';
@@ -27,12 +28,13 @@ import { getGoalsProgress, updateGoalProgress, GoalProgress } from '../services/
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
-import { generateVibrantColor, getTextColorForBackground } from '../utils/colorUtils';
+import { getTextColorForBackground } from '../utils/colorUtils';
 
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import SnappingCarousel, { SnappingCarouselRef } from '../components/SnappingCarousel';
 import { Timestamp } from 'firebase/firestore';
-import TaskItem from '../components/home/TaskItem';
+import EnhancedTaskItem from '../components/home/EnhancedTaskItem';
+import { swipeableManager } from '../utils/swipeableManager';
 
 // Conditional import for DateTimePicker
 let DateTimePicker: any = null;
@@ -50,8 +52,23 @@ interface User {
 // Define header height as a constant
 const HEADER_HEIGHT = verticalScale(60);
 
+const getDarkerColor = (hexColor: string, factor: number = 0.8): string => {
+  // Convert hex to RGB
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+
+  // Darken each component
+  const darkR = Math.floor(r * factor);
+  const darkG = Math.floor(g * factor);
+  const darkB = Math.floor(b * factor);
+
+  return `rgb(${darkR}, ${darkG}, ${darkB})`;
+};
+
 const MainHomeScreen = () => {
   const { user } = useAuth() as { user: User | null };
+  const insets = useSafeAreaInsets();
   const [task, setTask] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
@@ -68,7 +85,6 @@ const MainHomeScreen = () => {
     startDate.setHours(0, 0, 0, 0);
     return startDate;
   });
-  const [showTodayButton, setShowTodayButton] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskDescription, setEditTaskDescription] = useState('');
@@ -87,6 +103,10 @@ const MainHomeScreen = () => {
   const heatmapDaysRef = useRef<any[]>([]);
   const heatmapCarouselRef = useRef<SnappingCarouselRef>(null);
   const daySelectorRef = useRef<ScrollView>(null);
+  const [isReturningToToday, setIsReturningToToday] = useState(false);
+  const runnerAnimation = useRef(new Animated.Value(0)).current;
+  const todayPulseAnimation = useRef(new Animated.Value(1)).current;
+  const buttonPressAnimation = useRef(new Animated.Value(1)).current;
 
   // For animated header
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -165,26 +185,80 @@ const MainHomeScreen = () => {
     }
   }, []);
 
-  // Scroll to selected day when it changes
+  // Pulse animation for today's date
   useEffect(() => {
-    // Find the index of the selected day in our 30-day array
-    const selectedIndex = Math.floor((selectedDate.getTime() - weekStartDate.getTime()) / (1000 * 60 * 60 * 24));
-    if (selectedIndex >= 0 && selectedIndex < 30) {
-      scrollToSelectedDay(selectedIndex);
-    }
-  }, [selectedDate]);
-
-  // Show "Today" button when user selects a date that's not today
-  useEffect(() => {
-    const today = new Date();
-    const isTodaySelected = selectedDate.toDateString() === today.toDateString();
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(todayPulseAnimation, {
+          toValue: 1.05,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(todayPulseAnimation, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ])
+    );
     
-    if (!isTodaySelected) {
-      setShowTodayButton(true);
-    } else {
-      setShowTodayButton(false);
+    pulseAnimation.start();
+    
+    return () => {
+      pulseAnimation.stop();
+    };
+  }, [todayPulseAnimation]);
+
+  const scrollToSelectedDay = (dayIndex: number) => {
+    if (daySelectorRef.current) {
+      const itemWidth = verticalScale(36) + scale(6); // day circle width + margin
+      const scrollTo = dayIndex * itemWidth;
+      daySelectorRef.current.scrollTo({ x: scrollTo, animated: true });
     }
-  }, [selectedDate]);
+  };
+
+  // Scroll to selected day when it changes, positioning it as the 3rd circle
+  useEffect(() => {
+    const findAndScroll = () => {
+      // Calculate the index of the selected date in our 60-day array
+      const startDate = new Date(weekStartDate);
+      startDate.setHours(0, 0, 0, 0);
+
+      const targetDate = new Date(selectedDate);
+      targetDate.setHours(0, 0, 0, 0);
+
+      const timeDiff = targetDate.getTime() - startDate.getTime();
+      const dayDiff = Math.round(timeDiff / (1000 * 3600 * 24));
+
+      // Check if the selected date is within our 60-day range
+      if (dayDiff >= 0 && dayDiff < 60) {
+        if (dayDiff < 2) {
+          // Selected date is too close to the start of the list.
+          // We need to shift the weekStartDate back to make space.
+          const newWeekStartDate = new Date(weekStartDate);
+          newWeekStartDate.setDate(newWeekStartDate.getDate() - 7);
+          setWeekStartDate(newWeekStartDate);
+          return; // This effect will re-run with the new weekStartDate
+        }
+
+        const scrollIndex = dayDiff - 2;
+        scrollToSelectedDay(scrollIndex);
+        return;
+      }
+
+      // If we are here, the selectedDate is not in the current 60-day view.
+      // We'll reset the weekStartDate to the week of the selectedDate.
+      const newWeekStartDate = getStartOfWeek(selectedDate);
+      setWeekStartDate(newWeekStartDate);
+    };
+
+    // Only run the scroll positioning after interactions to avoid blocking the UI
+    InteractionManager.runAfterInteractions(() => {
+      findAndScroll();
+    });
+  }, [selectedDate, weekStartDate]);
+
+
 
   // Handle hardware back button
   useEffect(() => {
@@ -255,6 +329,13 @@ const MainHomeScreen = () => {
     };
   }, [user, fetchLinkedUsers, loading, fetchGoals]);
 
+  // Memoize the normalized selected date to avoid recalculating in filter
+  const normalizedSelectedDate = useMemo(() => {
+    const date = new Date(selectedDate);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  }, [selectedDate]);
+
   // Filter tasks based on search query and selected date
   useEffect(() => {
     const filtered = tasks.filter(task => {
@@ -266,16 +347,14 @@ const MainHomeScreen = () => {
       if (task.dueDate) {
         const taskDate = task.dueDate.toDate();
         taskDate.setHours(0, 0, 0, 0);
-        const selectedDateNormalized = new Date(selectedDate);
-        selectedDateNormalized.setHours(0, 0, 0, 0);
-        matchesDate = taskDate.getTime() === selectedDateNormalized.getTime();
+        matchesDate = taskDate.getTime() === normalizedSelectedDate;
       }
 
       return matchesSearch && matchesDate;
     });
 
     setFilteredTasks(filtered);
-  }, [tasks, searchQuery, selectedDate]);
+  }, [tasks, searchQuery, normalizedSelectedDate]);
 
   const addTask = async () => {
     if (newTaskText.trim() && user) {
@@ -361,55 +440,7 @@ const MainHomeScreen = () => {
     setEditTaskDescription(taskItem.description || '');
   };
 
-  // Scroll to the selected day in the day selector
-  const scrollToSelectedDay = (dayIndex: number) => {
-    if (daySelectorRef.current) {
-      const itemWidth = verticalScale(32) + scale(10); // day circle width + margin
-      const scrollTo = dayIndex * itemWidth;
-      daySelectorRef.current.scrollTo({ x: scrollTo, animated: true });
-    }
-  };
 
-  // Initialize the scroll view to show today as the second visible day
-  useEffect(() => {
-    // Find today's index in our generated days array
-    const today = new Date();
-    let todayIndex = -1;
-    
-    for (let i = 0; i < 60; i++) {
-      const day = new Date(weekStartDate);
-      day.setDate(weekStartDate.getDate() + i);
-      if (day.toDateString() === today.toDateString()) {
-        todayIndex = i;
-        break;
-      }
-    }
-    
-    // If we found today, scroll to it as the second visible day (index - 1)
-    if (todayIndex >= 1) {
-      setTimeout(() => {
-        scrollToSelectedDay(todayIndex - 1);
-      }, 100); // Small delay to ensure ScrollView is ready
-    } else if (todayIndex === 0) {
-      // If today is the first day, scroll to the beginning
-      setTimeout(() => {
-        scrollToSelectedDay(0);
-      }, 100);
-    }
-  }, []);
-
-  // Jump to today
-  const jumpToToday = () => {
-    const today = new Date();
-    setSelectedDate(today);
-    // Reset week start to center around today
-    const day = today.getDay();
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - day);
-    startDate.setHours(0, 0, 0, 0);
-    setWeekStartDate(startDate);
-    setShowTodayButton(false);
-  };
 
   const saveTaskEdits = async () => {
     if (selectedTask && user) {
@@ -439,6 +470,72 @@ const MainHomeScreen = () => {
         setTasks(tasks);
       }
     }
+  };
+
+  const isFutureDate = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate > today;
+  }
+
+  const findIndexForDate = (targetDate: Date) => {
+    for (let i = 0; i < 60; i++) {
+      const arrayDay = new Date(weekStartDate);
+      arrayDay.setDate(weekStartDate.getDate() + i);
+      if (arrayDay.toDateString() === targetDate.toDateString()) {
+        return i;
+      }
+    }
+    return -1; // Not found
+  };
+
+  const animateScrollToToday = () => {
+    const today = new Date();
+    const startIndex = findIndexForDate(selectedDate);
+    const endIndex = findIndexForDate(today);
+    const itemWidth = verticalScale(32) + scale(4);
+
+    if (startIndex === -1 || endIndex === -1 || startIndex <= endIndex) {
+      setSelectedDate(today);
+      return;
+    }
+
+    setIsReturningToToday(true);
+    runnerAnimation.setValue(0);
+
+    // Animate the runner emoji
+    Animated.timing(runnerAnimation, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+
+    const duration = 500; // ms
+    const startTime = Date.now();
+
+    const animationLoop = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easedProgress = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+
+      const currentIndex = startIndex - (startIndex - endIndex) * easedProgress;
+
+      const scrollIndex = Math.max(0, currentIndex - 2);
+      const scrollPos = scrollIndex * itemWidth;
+
+      daySelectorRef.current?.scrollTo({ x: scrollPos, animated: false });
+
+      if (progress < 1) {
+        requestAnimationFrame(animationLoop);
+      } else {
+        setSelectedDate(today);
+        setIsReturningToToday(false);
+      }
+    };
+
+    requestAnimationFrame(animationLoop);
   };
 
   const deleteSelectedTask = () => {
@@ -672,13 +769,15 @@ const MainHomeScreen = () => {
       newWeekStartDate.setDate(newWeekStartDate.getDate() + 7);
     }
     setWeekStartDate(newWeekStartDate);
-    
-    // Also update selectedDate to the first day of the new week
-    const newSelectedDate = new Date(newWeekStartDate);
+
+    // Also update selectedDate to the same day of week in the new week
+    const newSelectedDate = new Date(selectedDate);
+    if (direction === 'prev') {
+      newSelectedDate.setDate(newSelectedDate.getDate() - 7);
+    } else {
+      newSelectedDate.setDate(newSelectedDate.getDate() + 7);
+    }
     setSelectedDate(newSelectedDate);
-    
-    // Show today button
-    setShowTodayButton(true);
   };
 
 
@@ -691,7 +790,7 @@ const MainHomeScreen = () => {
   }
 
   return (
-    <SafeAreaView style={globalStyles.container}>
+    <View style={[globalStyles.container, { paddingTop: insets.top }]}>
       <View style={{ flex: 1 }}>
         {/* Animated Header */}
         <Animated.View
@@ -706,8 +805,36 @@ const MainHomeScreen = () => {
           <View style={styles.headerContent}>
             <Image source={require('../../assets/images/heartlogo.png')} style={styles.headerLogo} />
             <Text style={styles.headerText}>Habit Hearts</Text>
+            <TouchableOpacity
+              style={styles.headerAddButton}
+              onPress={() => {
+                const now = new Date();
+                // Set default time to 12:00 AM (midnight) for the same day
+                now.setHours(0, 0, 0, 0);
+                setNewTaskText('');
+                setNewTaskDescription('');
+                setNewTaskDate(now);
+                setTempSelectedDate(now);
+                setIsAddTaskModalVisible(true);
+              }}
+            >
+              <Icon name="add" size={responsiveFontSize(24)} color={colors.text} />
+            </TouchableOpacity>
           </View>
         </Animated.View>
+
+        {isReturningToToday && (
+          <Animated.View style={[styles.runnerContainer, {
+            transform: [{
+              translateX: runnerAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [widthPercentage(100), -50] // From right to left
+              })
+            }]
+          }]}>
+            <Text style={styles.runnerEmoji}>🏃</Text>
+          </Animated.View>
+        )}
 
         {/* Scrollable Content */}
         <Animated.ScrollView
@@ -718,6 +845,10 @@ const MainHomeScreen = () => {
             { useNativeDriver: true }
           )}
           scrollEventThrottle={16}
+          onTouchStart={() => {
+            // Close all swipeables when touching the scroll view
+            swipeableManager.closeAll();
+          }}
         >
           {/* Search Bar */}
           {/* <View style={styles.searchContainer}>
@@ -732,73 +863,96 @@ const MainHomeScreen = () => {
           </View> */}
 
           {/* Scrollable Day Selector with Month Names and Fade Shades */}
-          <View style={styles.weekSelectorContainer}>
+          {/* Today Button */}
+          <View style={{
+            flexDirection: 'row',
+            alignSelf: 'center',
+            alignItems: 'center',
+            paddingHorizontal: scale(16),
+            paddingVertical: verticalScale(6),
+            backgroundColor: colors.surface,
+            borderRadius: moderateScale(20),
+            elevation: 2,
+            shadowColor: '#2a2a2aff',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            marginTop: verticalScale(8),
+            marginBottom: verticalScale(1),
+          }}>
+            <Icon name="favorite" size={responsiveFontSize(16)} color={colors.secondary} />
+            <Text style={[styles.hiText, { marginLeft: scale(6) }]}>Hi, {user?.name || 'User'}, </Text>
             <TouchableOpacity
-              style={styles.weekNavButton}
               onPress={() => {
-                if (showTodayButton) {
-                  jumpToToday();
-                } else {
-                  changeDate('prev');
-                }
+                const today = new Date();
+                setSelectedDate(today);
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
               }}
             >
-              {showTodayButton ? (
-                <Text style={styles.todayNavText}>Today</Text>
-              ) : (
-                <Icon name="chevron-left" size={responsiveFontSize(24)} color={colors.text} />
-              )}
+              <Text style={[styles.hiText, { textDecorationLine: 'none', fontWeight: '700' }]}>
+                today is 
+              </Text>
+              <Text style={[styles.hiText, { 
+                textDecorationLine: 'underline', 
+                marginLeft: scale(4),
+                fontWeight: '800'
+              }]}>
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </Text>
+              <Icon name="calendar-today" size={responsiveFontSize(14)} color={colors.secondary} style={{ marginLeft: scale(4) }} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.weekSelectorContainer}>
+            <TouchableOpacity
+              style={[styles.weekNavButton, { backgroundColor: 'white', transform: [{ scale: buttonPressAnimation }] }]}
+              onPress={() => changeDate('prev')}
+              activeOpacity={0.7}
+              onPressIn={() => Animated.timing(buttonPressAnimation, {
+                toValue: 0.9,
+                duration: 100,
+                useNativeDriver: true,
+              }).start()}
+              onPressOut={() => Animated.timing(buttonPressAnimation, {
+                toValue: 1,
+                duration: 100,
+                useNativeDriver: true,
+              }).start()}
+            >
+              <Icon name="chevron-left" size={responsiveFontSize(28)} color={colors.primary} />
             </TouchableOpacity>
 
             <View style={styles.daysScrollViewContainer}>
               {/* Left fade shade */}
-              <View style={styles.leftFade}>
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 1)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.9)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.7)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.5)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.3)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)'}} />
+              <View style={styles.leftFade} pointerEvents="none">
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
               </View>
 
-              <ScrollView 
+              <ScrollView
                 ref={daySelectorRef}
-                horizontal 
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 pagingEnabled={false}
                 decelerationRate="fast"
-                onScrollBeginDrag={() => {
-                  // Show today button when user starts scrolling
-                  const today = new Date();
-                  const isTodaySelected = selectedDate.toDateString() === today.toDateString();
-                  if (!isTodaySelected) {
-                    setShowTodayButton(true);
-                  }
-                }}
-                onMomentumScrollEnd={(event) => {
-                  // Hide today button after scrolling stops
-                  setTimeout(() => {
-                    setShowTodayButton(false);
-                  }, 3000);
-                }}
-                snapToInterval={verticalScale(32) + scale(10)} // day circle width + margin
+                snapToInterval={verticalScale(36) + scale(6)} // day circle width + margin
                 style={styles.weekDaysContainer}
                 contentContainerStyle={styles.weekDaysContentContainer}
               >
                 {/* Generate 60 days (about 2 months) for scrolling */}
-                {Array.from({ length: 60 }, (_, i) => {
+                {useMemo(() => Array.from({ length: 60 }, (_, i) => {
                   const day = new Date(weekStartDate);
                   day.setDate(weekStartDate.getDate() + i);
                   const isSelected = day.toDateString() === selectedDate.toDateString();
                   const isTodayDate = isToday(day);
-                  
+
                   return (
-                    <View key={i} style={styles.dayContainer}>
+                    <View key={`${day.toISOString()}-${i}`} style={styles.dayContainer}>
                       <Text style={styles.monthIndicator}>
                         {day.toLocaleDateString('en-US', { month: 'short' })}
                       </Text>
@@ -806,12 +960,17 @@ const MainHomeScreen = () => {
                         style={[
                           styles.dayCircle,
                           isSelected && styles.selectedDayCircle,
-                          isTodayDate && styles.todayDayCircle
+                          isTodayDate && styles.todayDayCircle,
+                          {
+                            transform: [
+                              { scale: isTodayDate ? todayPulseAnimation : 1 }
+                            ]
+                          }
                         ]}
                         onPress={() => {
                           setSelectedDate(day);
-                          scrollToSelectedDay(i);
                         }}
+                        activeOpacity={0.7}
                       >
                         <Text style={[
                           styles.dayName,
@@ -830,54 +989,71 @@ const MainHomeScreen = () => {
                       </TouchableOpacity>
                     </View>
                   );
-                })}
+                }), [weekStartDate, selectedDate])}
               </ScrollView>
 
               {/* Right fade shade */}
-              <View style={styles.rightFade}>
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.3)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.5)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.7)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.9)'}} />
-                <View style={{flex: 1, backgroundColor: 'rgba(255, 255, 255, 1)'}} />
+              <View style={styles.rightFade} pointerEvents="none">
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
+                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
               </View>
             </View>
 
             <TouchableOpacity
-              style={styles.weekNavButton}
-              onPress={() => {
-                if (showTodayButton) {
-                  jumpToToday();
-                } else {
-                  changeDate('next');
-                }
-              }}
+              style={[styles.weekNavButton, { backgroundColor: 'white', transform: [{ scale: buttonPressAnimation }] }]}
+              onPress={() => changeDate('next')}
+              activeOpacity={0.7}
+              onPressIn={() => Animated.timing(buttonPressAnimation, {
+                toValue: 0.9,
+                duration: 100,
+                useNativeDriver: true,
+              }).start()}
+              onPressOut={() => Animated.timing(buttonPressAnimation, {
+                toValue: 1,
+                duration: 100,
+                useNativeDriver: true,
+              }).start()}
             >
-              {showTodayButton ? (
-                <Text style={styles.todayNavText}>Today</Text>
-              ) : (
-                <Icon name="chevron-right" size={responsiveFontSize(24)} color={colors.text} />
-              )}
+              <Icon name="chevron-right" size={responsiveFontSize(28)} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
+
+
           {/* Task List */}
           <View style={styles.taskListContainer}>
-            {filteredTasks.map((item) => (
-              <TaskItem
-                key={item.id}
-                item={item}
-                user={user}
-                onOpenTaskDetail={openTaskDetail}
-                onDeleteTask={deleteTaskItem}
-              />
-            ))}
+            {filteredTasks
+              .sort((a, b) => {
+                // First sort by completion status (incomplete tasks first)
+                if (a.completed !== b.completed) {
+                  return a.completed ? 1 : -1;
+                }
+                
+                // Then sort by due date (earlier dates first)
+                if (a.dueDate && b.dueDate) {
+                  return a.dueDate.toDate().getTime() - b.dueDate.toDate().getTime();
+                }
+                
+                // Tasks with due dates come before tasks without due dates
+                if (a.dueDate && !b.dueDate) return -1;
+                if (!a.dueDate && b.dueDate) return 1;
+                
+                // Finally sort by creation date (newer first)
+                return b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime();
+              })
+              .map((item) => (
+                <EnhancedTaskItem
+                  key={item.id}
+                  item={item}
+                  user={user}
+                  onOpenTaskDetail={openTaskDetail}
+                  onDeleteTask={deleteTaskItem}
+                  onToggleTask={toggleTask}
+                />
+              ))}
             {filteredTasks.length === 0 && (
               <View style={styles.emptyContainer}>
                 <Text style={globalStyles.text}>No tasks found. Add your first task!</Text>
@@ -945,23 +1121,8 @@ const MainHomeScreen = () => {
                     '#FFF5EE', // Seashell
                     '#FDF5E6'  // Old lace
                   ];
-                  
-                  const backgroundColor = pastelColors[index % pastelColors.length];
 
-                  // Generate a darker version of the background color for the title
-                  const getDarkerColor = (hexColor: string, factor: number = 0.8): string => {
-                    // Convert hex to RGB
-                    const r = parseInt(hexColor.slice(1, 3), 16);
-                    const g = parseInt(hexColor.slice(3, 5), 16);
-                    const b = parseInt(hexColor.slice(5, 7), 16);
-                    
-                    // Darken each component
-                    const darkR = Math.floor(r * factor);
-                    const darkG = Math.floor(g * factor);
-                    const darkB = Math.floor(b * factor);
-                    
-                    return `rgb(${darkR}, ${darkG}, ${darkB})`;
-                  };
+                  const backgroundColor = pastelColors[index % pastelColors.length];
 
                   const titleColor = getDarkerColor(backgroundColor);
                   const weekDaysBackgroundColor = getDarkerColor(backgroundColor, 0.7); // Even darker for weekdays
@@ -972,13 +1133,13 @@ const MainHomeScreen = () => {
                     let streak = 0;
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    
+
                     // Count consecutive completed days backwards from today
                     let currentDate = new Date(today);
                     while (true) {
                       const dateStr = currentDate.toISOString().split('T')[0];
                       const progressRecord = goalProgress.find(p => p.date === dateStr);
-                      
+
                       if (progressRecord && progressRecord.completed) {
                         streak++;
                         // Move to previous day
@@ -987,7 +1148,7 @@ const MainHomeScreen = () => {
                         break;
                       }
                     }
-                    
+
                     return streak;
                   };
 
@@ -1001,22 +1162,22 @@ const MainHomeScreen = () => {
                     const now = new Date();
                     const currentMonth = now.getMonth();
                     const currentYear = now.getFullYear();
-                    
+
                     // Get the number of days in the current month
                     const daysInMonth = getDaysInMonth();
-                    
+
                     // Count completed days in the current month
                     let completedDays = 0;
                     for (let day = 1; day <= daysInMonth; day++) {
                       const date = new Date(currentYear, currentMonth, day);
                       const dateStr = date.toISOString().split('T')[0];
                       const progressRecord = goalProgress.find(p => p.date === dateStr);
-                      
+
                       if (progressRecord && progressRecord.completed) {
                         completedDays++;
                       }
                     }
-                    
+
                     // Calculate percentage based on total days in month
                     return Math.round((completedDays / daysInMonth) * 100);
                   };
@@ -1182,23 +1343,6 @@ const MainHomeScreen = () => {
           </View>
         </Animated.ScrollView>
 
-        {/* Floating Action Button */}
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => {
-            const now = new Date();
-            // Set default time to 12:00 AM (midnight) for the same day
-            now.setHours(0, 0, 0, 0);
-            setNewTaskText('');
-            setNewTaskDescription('');
-            setNewTaskDate(now);
-            setTempSelectedDate(now);
-            setIsAddTaskModalVisible(true);
-          }}
-        >
-          <Icon name="add" size={responsiveFontSize(30)} color="white" />
-        </TouchableOpacity>
-
         {/* Add Task Modal */}
         <Modal
           visible={isAddTaskModalVisible}
@@ -1258,7 +1402,8 @@ const MainHomeScreen = () => {
                   >
                     <View style={styles.selectedDateTimeContainer}>
                       <Text style={styles.selectedDateTimeText}>
-                        {`Selected due date & time:\n`} {newTaskDate.toLocaleDateString()} at {newTaskDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        {`Selected due date & time:
+`} {newTaskDate.toLocaleDateString()} at {newTaskDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
                       </Text>
                     </View>
                     <Text style={styles.dateDisplayText}>
@@ -1580,7 +1725,7 @@ const MainHomeScreen = () => {
           </SafeAreaView>
         </Modal>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -1610,8 +1755,14 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
     width: '100%',
+    paddingHorizontal: scale(16),
+  },
+  headerAddButton: {
+    padding: scale(8),
+    backgroundColor: colors.secondary,
+    borderRadius: moderateScale(10),
   },
   headerLogo: {
     width: verticalScale(30),
@@ -1642,7 +1793,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   dailyCheckButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     paddingHorizontal: scale(20),
     paddingVertical: verticalScale(10),
     borderRadius: moderateScale(25),
@@ -1703,7 +1854,7 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     height: verticalScale(6),
-    backgroundColor: colors.grey200,
+    backgroundColor: colors.gray200,
     borderRadius: moderateScale(3),
     marginVertical: verticalScale(4),
     overflow: 'hidden',
@@ -1721,7 +1872,7 @@ const styles = StyleSheet.create({
   },
   heatmapCalendar: {
     borderRadius: moderateScale(12),
-    backgroundColor: colors.grey50,
+    backgroundColor: colors.gray50,
     padding: scale(10),
     height: 200,
   },
@@ -1755,7 +1906,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(6),
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.grey200,
+    borderColor: colors.gray200,
   },
   currentMonthCell: {
     // No additional styling needed
@@ -1775,16 +1926,16 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   heatmapDateDefault: {
-    backgroundColor: colors.grey100,
-    borderColor: colors.grey300,
+    backgroundColor: colors.gray100,
+    borderColor: colors.gray300,
   },
   heatmapDateFuture: {
-    backgroundColor: colors.grey50,
-    borderColor: colors.grey200,
+    backgroundColor: colors.gray50,
+    borderColor: colors.gray200,
   },
   heatmapDateCompleted: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#388E3C',
+    backgroundColor: colors.success,
+    borderColor: colors.successDark,
     // Add subtle shadow for depth
     shadowColor: '#000',
     shadowOffset: {
@@ -1796,8 +1947,8 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   heatmapDateMissed: {
-    backgroundColor: '#F44336',
-    borderColor: '#D32F2F',
+    backgroundColor: colors.error,
+    borderColor: colors.errorDark,
     // Add subtle shadow for depth
     shadowColor: '#000',
     shadowOffset: {
@@ -1842,7 +1993,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: scale(12),
     marginTop: verticalScale(16),
-    backgroundColor: colors.grey50,
+    backgroundColor: colors.gray50,
     borderRadius: moderateScale(10),
     paddingVertical: verticalScale(10),
     borderWidth: 1,
@@ -1859,13 +2010,13 @@ const styles = StyleSheet.create({
     marginRight: scale(6),
   },
   legendCompleted: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
   },
   legendMissed: {
-    backgroundColor: '#F44336',
+    backgroundColor: colors.error,
   },
   legendDefault: {
-    backgroundColor: colors.grey200,
+    backgroundColor: colors.gray200,
   },
   legendText: {
     fontSize: responsiveFontSize(12),
@@ -1921,7 +2072,6 @@ const styles = StyleSheet.create({
   weekSelectorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: scale(16),
     marginBottom: verticalScale(16),
     marginTop: verticalScale(8),
@@ -1939,8 +2089,9 @@ const styles = StyleSheet.create({
   },
   daysScrollViewContainer: {
     flex: 1,
-    marginHorizontal: scale(5),
+    marginHorizontal: scale(8),
     position: 'relative',
+    marginTop: verticalScale(-8),
   },
   weekDaysContainer: {
     flex: 1,
@@ -1948,14 +2099,15 @@ const styles = StyleSheet.create({
   weekDaysContentContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: scale(10), // Increased padding to prevent cropping
+    paddingHorizontal: scale(15), // Increased padding to prevent cropping
+    paddingVertical: verticalScale(5),
   },
   leftFade: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    width: scale(20),
+    width: scale(15),
     zIndex: 1,
     flexDirection: 'row',
     pointerEvents: 'none',
@@ -1965,16 +2117,17 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    width: scale(20),
+    width: scale(15),
     zIndex: 1,
     flexDirection: 'row',
     pointerEvents: 'none',
   },
-  
-  
+
+
   dayContainer: {
     alignItems: 'center',
-    marginHorizontal: scale(2),
+    marginHorizontal: scale(3),
+    marginVertical: verticalScale(2),
   },
   monthIndicator: {
     fontSize: responsiveFontSize(10),
@@ -1983,14 +2136,14 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(2),
   },
   dayCircle: {
-    width: verticalScale(32),
-    height: verticalScale(32),
-    borderRadius: moderateScale(16),
-    backgroundColor: colors.grey100,
+    width: verticalScale(36),
+    height: verticalScale(36),
+    borderRadius: moderateScale(18),
+    backgroundColor: colors.gray100,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.grey300,
+    borderColor: colors.gray300,
   },
   selectedDayCircle: {
     backgroundColor: colors.primary,
@@ -2016,11 +2169,6 @@ const styles = StyleSheet.create({
   },
   todayDayText: {
     color: colors.textLight,
-  },
-  todayNavText: {
-    color: colors.primary,
-    fontSize: responsiveFontSize(12),
-    fontWeight: '700',
   },
   emptyContainer: {
     flex: 1,
@@ -2068,9 +2216,20 @@ const styles = StyleSheet.create({
     width: verticalScale(32),
     height: verticalScale(32),
     borderRadius: moderateScale(16),
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: scale(6),
+  },
+  hiText: {
+    color: colors.secondary,
+    fontSize: responsiveFontSize(12),
+    fontWeight: '900',
+  },
+  runnerContainer: {
+    position: 'absolute',
+    top: verticalScale(120), // Position it below the date scroller
+    zIndex: 2000,
+    elevation: 20,
+  },
+  runnerEmoji: {
+    fontSize: responsiveFontSize(40),
   },
   deleteButton: {
     backgroundColor: colors.error,
@@ -2137,7 +2296,7 @@ const styles = StyleSheet.create({
     paddingVertical: verticalScale(10),
     minHeight: verticalScale(70),
     maxHeight: verticalScale(100),
-    backgroundColor: colors.grey50,
+    backgroundColor: colors.gray50,
     borderRadius: moderateScale(8),
     paddingHorizontal: scale(10),
     marginBottom: verticalScale(12),
@@ -2170,7 +2329,7 @@ const styles = StyleSheet.create({
   selectedDateTimeContainer: {
     marginTop: verticalScale(8),
     padding: scale(8),
-    backgroundColor: colors.grey50,
+    backgroundColor: colors.gray50,
     borderRadius: moderateScale(6),
   },
   selectedDateTimeText: {
@@ -2189,21 +2348,6 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     fontSize: responsiveFontSize(16),
     fontWeight: '600',
-  },
-
-  fab: {
-    position: 'absolute',
-    bottom: verticalScale(16),
-    right: scale(16),
-    width: verticalScale(56),
-    height: verticalScale(56),
-    borderRadius: moderateScale(28),
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   pickerModalContainer: {
     flex: 1,
@@ -2245,7 +2389,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: scale(8),
     borderRadius: moderateScale(8),
-    backgroundColor: colors.grey200,
+    backgroundColor: colors.gray200,
   },
   pickerCancelText: {
     color: colors.text,
@@ -2291,7 +2435,7 @@ const styles = StyleSheet.create({
   customPickerButton: {
     padding: scale(8),
     borderRadius: moderateScale(8),
-    backgroundColor: colors.grey200,
+    backgroundColor: colors.gray200,
     minWidth: widthPercentage(20),
     alignItems: 'center',
   },
@@ -2329,7 +2473,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     marginBottom: verticalScale(8),
     paddingVertical: verticalScale(4),
-    backgroundColor: colors.grey200,
+    backgroundColor: colors.gray200,
     borderRadius: moderateScale(6),
   },
   calendarDayHeader: {
@@ -2376,7 +2520,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: verticalScale(24),
-    backgroundColor: colors.grey100,
+    backgroundColor: colors.gray100,
     borderRadius: moderateScale(12),
     marginVertical: verticalScale(8),
   },

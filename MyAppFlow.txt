@@ -166,5 +166,23 @@
 
 ---
 
+### **Theme Information**
+
+The app uses a **Royal Premium Theme** with the following color palette:
+* **Midnight Navy** (#0A192F) - Main dark background base
+* **Rich Burgundy** (#800020) - Secondary dark accent backgrounds
+* **Royal Gold** (#FFD700) - Premium highlights and call-to-action buttons
+* **Teal Blue** (#008B8B) - Subtle accent for secondary actions or highlights
+* **Coral Red** (#FF4C4C) - Strong attention-grabber for alerts or key CTAs
+* **Soft Ivory** (#F5F5DC) - Clean, readable text and neutral sections
+
+The design follows these principles:
+* Contrast & Elegance: Dark backgrounds with light text for high readability
+* Selective Accent Usage: Strategic use of Royal Gold, Teal Blue, and Coral Red
+* Visual Harmony: Consistent color scheme across all screens
+* Premium Feel: Luxurious combination of deep colors with metallic gold accents
+
+---
+
 👉 The flow is:
 **Splash → Onboarding → Auth → Profile → Linking → Dashboard → Features (Calendar, Tasks, Notes first) → Advanced Features → Premium → Settings/Notifications.**

@@ -1,39 +1,71 @@
 export default {
-  // Modern minimal color palette
-  primary: '#6200EE',        // Deep purple (Material design primary)
-  primaryLight: '#BB86FC',   // Light purple (Material design primary variant)
-  primaryDark: '#3700B3',    // Darker purple
-  secondary: '#03DAC6',      // Teal (Material design secondary)
-  secondaryLight: '#66FFF8', // Light teal
-  secondaryDark: '#018786',  // Darker teal
-  background: '#FFFFFF',     // Clean white background
-  surface: '#FFFFFF',        // White surface
-  error: '#B00020',          // Standard error red
-  success: '#4CAF50',        // Standard success green
-  warning: '#FF9800',        // Standard warning orange
-  info: '#2196F3',           // Standard info blue
+  // Ultra vibrant and bold color palette (4 core colors + variations)
+  
+  // Electric Red - Primary color for main actions and highlights
+  primary: '#FF3838',           // Electric Red
+  primaryLight: '#FF6B6B',      // Bright Red
+  primaryDark: '#E53232',       // Deep Red
+  
+  // Electric Blue - Secondary color for accents and complements
+  secondary: '#1E90FF',         // Dodger Blue
+  secondaryLight: '#4AAEFF',    // Light Blue
+  secondaryDark: '#1B81E5',     // Deep Blue
+  
+  // Clean White - Background and surfaces
+  background: '#FFFFFF',        // Clean White
+  surface: '#FFFFFF',           // Clean White
+  
+  // Charcoal - Text and important elements
+  text: '#1A1A1A',              // Deep Charcoal
+  textSecondary: '#4D4D4D',     // Medium Gray
+  textLight: '#FFFFFF',         // White text
+  
+  // Status and utility colors
+  success: '#00CC66',           // Electric Green for success
+  successDark: '#00B359',
+  error: '#FF3838',             // Electric Red for error
+  errorDark: '#E53232',
+  warning: '#FFCC00',           // Electric Yellow
+  info: '#1E90FF',              // Electric Blue (same as secondary)
+  orange: '#FF6600',            // Electric Orange
+  yellow: '#FFCC00',            // Electric Yellow
 
-  // Text colors
-  text: '#212121',           // Primary text (dark grey)
-  textSecondary: '#757575',  // Secondary text (medium grey)
-  textLight: '#FFFFFF',      // Light text (white)
-  textDark: '#000000',       // Dark text (black)
-
+  successLight: '#E6F9F0',
+  errorLight: '#FFE6E6',
+  orangeLight: '#FFF0E6',
+  yellowLight: '#FFF9E6',
+  
   // Border and divider
-  border: '#E0E0E0',         // Light grey border
-  divider: '#EEEEEE',        // Very light grey divider
-
-  // Neutral colors
+  border: '#CCCCCC',            // Medium Gray
+  divider: '#E6E6E6',           // Light Gray
+  
+  // Neutral tones
   white: '#FFFFFF',
   black: '#000000',
-  grey50: '#FAFAFA',
-  grey100: '#F5F5F5',
-  grey200: '#EEEEEE',
-  grey300: '#E0E0E0',
-  grey400: '#BDBDBD',
-  grey500: '#9E9E9E',
-  grey600: '#757575',
-  grey700: '#616161',
-  grey800: '#424242',
-  grey900: '#212121',
+  gray50: '#FAFAFA',
+  gray100: '#F5F5F5',
+  gray200: '#EEEEEE',
+  gray300: '#E0E0E0',
+  gray400: '#BDBDBD',
+  gray500: '#9E9E9E',
+  gray600: '#757575',
+  gray700: '#616161',
+  gray800: '#424242',
+  gray900: '#212121',
 };
+
+// Additional colors for specific use cases
+export const premiumColors = {
+  gold: '#FFD700',
+  purple: '#9932CC',
+  blue: '#00BFFF',
+};
+
+// Colors for charts and graphs
+export const chartColors = [
+  '#FF3838', // Primary
+  '#1E90FF', // Secondary
+  '#FFCC00', // Warning
+  '#4AAEFF', // Secondary Light
+  '#FF6B6B', // Primary Light
+];

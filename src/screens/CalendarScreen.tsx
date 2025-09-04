@@ -259,7 +259,7 @@ const CalendarScreen = () => {
         }
         return eventDateStr === dateStr;
       } catch (error) {
-        console.warn('Error processing event date for filtering:', error, 'Event:', e);
+        console.error('Error processing event date for filtering:', error, 'Event:', e);
         return false;
       }
     });
@@ -335,17 +335,14 @@ const CalendarScreen = () => {
       } else {
         // Fallback to current date if we can't parse the date
         eventDate = new Date();
-        console.warn('Unable to parse event date, using current date as fallback. Date value:', item.date);
       }
       
       // Check if the date is valid
       if (isNaN(eventDate.getTime())) {
         eventDate = new Date();
-        console.warn('Event date is invalid, using current date as fallback. Original date:', item.date);
       }
     } catch (error) {
       eventDate = new Date();
-      console.warn('Error processing event date, using current date as fallback. Original date:', item.date, 'Error:', error);
     }
     
     const isOwnEvent = item.createdBy === user.uid;
@@ -375,18 +372,18 @@ const CalendarScreen = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={globalStyles.container}>
+      <View style={[globalStyles.container, { paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading calendar...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={globalStyles.container}>
-      <View style={[styles.header, { marginTop: insets.top > 0 ? insets.top : verticalScale(10) }]}>
+    <View style={[globalStyles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
         <TouchableOpacity style={styles.navButton} onPress={() => changeMonth(-1)}>
           <Text style={styles.navButtonText}>‹</Text>
         </TouchableOpacity>
@@ -411,6 +408,7 @@ const CalendarScreen = () => {
           keyExtractor={item => item.id}
           style={styles.eventList}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: verticalScale(55) }}
           ListEmptyComponent={
             <View style={styles.emptyEventsContainer}>
               <Text style={globalStyles.text}>No events this month</Text>
@@ -463,7 +461,7 @@ const CalendarScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -543,10 +541,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   eventDayCell: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.secondary,
   },
   sharedEventDayCell: {
-    backgroundColor: colors.secondaryLight,
+    backgroundColor: colors.yellow,
   },
   dayText: {
     fontSize: responsiveFontSize(15),
@@ -656,7 +654,7 @@ const styles = StyleSheet.create({
     width: verticalScale(20),
     height: verticalScale(20),
     borderRadius: verticalScale(10),
-    backgroundColor: colors.grey200,
+    backgroundColor: colors.gray200,
     justifyContent: 'center',
     alignItems: 'center',
   },

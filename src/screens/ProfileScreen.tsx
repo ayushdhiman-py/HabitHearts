@@ -119,14 +119,14 @@ const ProfileScreen = () => {
   };
 
   return (
-    <SafeAreaView style={globalStyles.container}>
+    <View style={[globalStyles.container, { paddingTop: insets.top }]}>
       <ScrollView style={globalStyles.flex1}>
-        <View style={[styles.header, { marginTop: insets.top > 0 ? insets.top : verticalScale(10) }]}>
+        <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
           <Text style={styles.title}>Profile</Text>
         </View>
         
         {loading ? (
-          <View style={styles.loadingContainer}>
+          <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading profile...</Text>
           </View>
@@ -218,7 +218,7 @@ const ProfileScreen = () => {
           </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     marginLeft: scale(8),
     paddingHorizontal: scale(16),
   },
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginHorizontal: scale(16),
-    marginVertical: verticalScale(24),
+    marginVertical: verticalScale(8),
   },
   signOutButton: {
     backgroundColor: colors.error,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Image, StyleSheet, Dimensions } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -15,55 +15,62 @@ const Slideshow = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [nextIndex, setNextIndex] = useState(1);
   const [opacity, setOpacity] = useState(0);
+  const fadeIntervalRef = useRef<number | null>(null);
+  const transitionIntervalRef = useRef<number | null>(null);
 
   // Preload all images
   useEffect(() => {
     images.forEach((image) => {
       if (image && typeof image === 'number') {
-        const imageUri = Image.resolveAssetSource(image).uri;
-        Image.prefetch(imageUri).catch(error => {
-          console.warn('Failed to preload image:', imageUri, error);
-        });
+        Image.prefetch(Image.resolveAssetSource(image).uri);
       }
     });
   }, []);
 
   // Handle the crossfade transition
   useEffect(() => {
-    let transitionInterval;
-    let fadeInterval;
-
     const startTransition = () => {
+      // Clear any existing fade interval
+      if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+      }
+
+      // Set up the next image before starting fade
+      setCurrentIndex(prevIndex => {
+        const newIndex = (prevIndex + 1) % images.length;
+        setNextIndex((newIndex + 1) % images.length);
+        // Start with opacity 0 for the next image
+        setOpacity(0);
+        return newIndex;
+      });
+
       let fadeProgress = 0;
-      const fadeDuration = 1000; // 1.5 seconds
+      const fadeDuration = 1000; // 1 second fade
       const interval = 16; // ~60fps
 
-      fadeInterval = setInterval(() => {
+      fadeIntervalRef.current = setInterval(() => {
         fadeProgress += interval;
         const newOpacity = Math.min(fadeProgress / fadeDuration, 1);
         setOpacity(newOpacity);
 
         if (fadeProgress >= fadeDuration) {
-          clearInterval(fadeInterval);
-          // Update indices after fade completes
-          const newIndex = (currentIndex + 1) % images.length;
-          const newNextIndex = (newIndex + 1) % images.length;
-          setCurrentIndex(newIndex);
-          setNextIndex(newNextIndex);
-          setOpacity(0); // Reset opacity for next transition
+          clearInterval(fadeIntervalRef.current!);
+          fadeIntervalRef.current = null;
         }
       }, interval);
     };
 
-    transitionInterval = setInterval(() => {
-      startTransition();
-    }, 2000); // Change image every 2 seconds
+    transitionIntervalRef.current = setInterval(startTransition, 3000); // Change image every 3 seconds
 
     return () => {
-      clearInterval(transitionInterval);
-      if (fadeInterval) clearInterval(fadeInterval);
+      if (transitionIntervalRef.current) {
+        clearInterval(transitionIntervalRef.current);
+      }
+      if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+      }
     };
-  }, [currentIndex]);
+  }, []); // Run only once on mount
 
   return (
     <View style={styles.container}>

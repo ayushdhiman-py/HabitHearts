@@ -12,9 +12,18 @@ const AppNavigator = () => {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator 
+        screenOptions={{ 
+          headerShown: false,
+          contentStyle: { flex: 1 } // Ensure full height
+        }}
+      >
         {user ? (
-          <Stack.Screen name="Main" component={BottomTabNavigator} />
+          <Stack.Screen 
+            name="Main" 
+            component={BottomTabNavigator}
+            options={{ contentStyle: { flex: 1 } }} // Ensure full height
+          />
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />
         )}

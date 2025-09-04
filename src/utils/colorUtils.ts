@@ -1,21 +1,25 @@
 import colors from '../theme/colors';
 
 /**
- * Generate a purple shade based on a seed value.
+ * Generate a vibrant color from our rainbow palette based on a seed value.
  * @param seed - A number to use as a seed for color generation.
- * @returns A CSS rgb color string in purple shades.
+ * @returns A CSS rgb color string from our rainbow palette.
  */
 export const generateVibrantColor = (seed: number): string => {
-  // Define purple shades in RGB values
-  const purpleShades = [
-    [230, 230, 250], // Lavender (light purple) - rgb(230, 230, 250)
-    [147, 112, 219], // Medium Purple - rgb(147, 112, 219)
-    [75, 0, 130],    // Indigo (dark purple) - rgb(75, 0, 130)
+  // Define our rainbow palette in RGB values
+  const rainbowColors = [
+    [255, 107, 107], // Coral red - rgb(255, 107, 107)
+    [255, 160, 122], // Light salmon - rgb(255, 160, 122)
+    [255, 209, 102], // Warm yellow - rgb(255, 209, 102)
+    [6, 214, 160],   // Mint green - rgb(6, 214, 160)
+    [17, 138, 178],  // Sky blue - rgb(17, 138, 178)
+    [7, 59, 76],     // Deep blue - rgb(7, 59, 76)
+    [131, 56, 236],  // Vibrant purple - rgb(131, 56, 236)
   ];
 
-  // Use the seed to select a shade
-  const index = Math.floor(Math.abs(Math.sin(seed * 1000)) * purpleShades.length);
-  const [r, g, b] = purpleShades[index % purpleShades.length];
+  // Use the seed to select a color
+  const index = Math.floor(Math.abs(Math.sin(seed * 1000)) * rainbowColors.length);
+  const [r, g, b] = rainbowColors[index % rainbowColors.length];
 
   return `rgb(${r}, ${g}, ${b})`;
 };
@@ -37,45 +41,32 @@ const getLuminance = (r: number, g: number, b: number): number => {
 
 /**
  * Determine if text should be dark or light based on background color.
- * @param backgroundColor - RGB color string (e.g., "rgb(255, 128, 128)").
- * @returns Appropriate text color (dark text for light backgrounds, white text for dark backgrounds).
- */
-/**
- * Determine if text should be dark or light based on background color.
- * Special handling for our purple palette to ensure good contrast.
+ * Special handling for our rainbow palette to ensure good contrast.
  * @param backgroundColor - RGB color string (e.g., "rgb(255, 128, 128)").
  * @returns Appropriate text color (dark text for light backgrounds, white text for dark backgrounds).
  */
 export const getTextColorForBackground = (backgroundColor: string): string => {
   const match = backgroundColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
   if (!match) {
-    console.log('getTextColorForBackground: No match for', backgroundColor, 'returning default black');
     return colors.text; // Default to black text
   }
 
   const r = parseInt(match[1], 10);
   const g = parseInt(match[2], 10);
   const b = parseInt(match[3], 10);
-  
-  console.log('getTextColorForBackground called with:', backgroundColor, 'rgb values:', r, g, b);
 
-  // Special handling for our purple palette
-  // Our colors: rgb(230, 230, 250), rgb(147, 112, 219), rgb(75, 0, 130)
-  if (r >= 200 && g >= 200 && b >= 200) {
-    // Very light colors (lavender) - use black text
-    console.log('getTextColorForBackground: Very light color, returning black text');
+  // Special handling for our rainbow palette
+  // Light colors - use dark text
+  if (r >= 200 && g >= 200) {
+    // Very light colors (yellow, coral, salmon) - use dark text
     return colors.text; // Black text for very light backgrounds
-  } else if (r <= 100 && g <= 50 && b >= 100) {
-    // Very dark colors (indigo) - use white text
-    console.log('getTextColorForBackground: Very dark color, returning white text');
+  } else if (r <= 50 && g <= 50 && b <= 50) {
+    // Very dark colors (deep blue, dark purple) - use white text
     return colors.textLight; // White text for very dark backgrounds
   } else {
     // For medium colors, calculate luminance
     const luminance = getLuminance(r, g, b);
-    console.log('getTextColorForBackground: Medium color, luminance:', luminance);
-    // Use a lower threshold (0.3 instead of 0.5) for better contrast with medium purples
-    const textColor = luminance > 0.3 ? colors.text : colors.textLight;
-    console.log('getTextColorForBackground: returning', textColor);
-    return textColor;
+    // Use a threshold of 0.4 for better contrast with our vibrant colors
+    return luminance > 0.4 ? colors.text : colors.textLight;
   }
 };

@@ -147,20 +147,20 @@ const GoalsScreen = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={globalStyles.container}>
-        <View style={[styles.header, { marginTop: insets.top > 0 ? insets.top : verticalScale(10) }]}>
+      <View style={[globalStyles.container, { paddingTop: insets.top }]}>
+        <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
           <Text style={styles.title}>Your Goals</Text>
         </View>
         <View style={globalStyles.card}>
           <Text style={globalStyles.text}>Loading goals...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={globalStyles.container}>
-      <View style={[styles.header, { marginTop: insets.top > 0 ? insets.top : verticalScale(10) }]}>
+    <View style={[globalStyles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
         <Text style={styles.title}>Your Goals</Text>
       </View>
       
@@ -187,14 +187,14 @@ const GoalsScreen = () => {
         renderItem={renderGoal}
         keyExtractor={item => item.id}
         style={styles.list}
-        contentContainerStyle={goals.length === 0 ? styles.emptyList : null}
+        contentContainerStyle={goals.length === 0 ? styles.emptyList : { paddingBottom: verticalScale(55) }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={globalStyles.text}>No goals yet. Add your first goal!</Text>
           </View>
         }
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
     marginLeft: scale(8),
     paddingHorizontal: scale(16),
   },
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     marginLeft: scale(4),
   },
   editButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
   },
   deleteButton: {
     backgroundColor: colors.error,

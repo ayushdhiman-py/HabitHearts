@@ -76,7 +76,7 @@ export default StyleSheet.create({
     backgroundColor: colors.secondary,
   },
   tertiaryButton: {
-    backgroundColor: colors.grey200,
+    backgroundColor: colors.gray200,
   },
   outlineButton: {
     backgroundColor: 'transparent',
@@ -87,7 +87,7 @@ export default StyleSheet.create({
     color: colors.primary,
   },
   disabledButton: {
-    backgroundColor: colors.grey300,
+    backgroundColor: colors.gray300,
   },
   text: {
     fontSize: responsiveFontSize(16),

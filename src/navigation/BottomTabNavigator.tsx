@@ -23,8 +23,6 @@ const BottomTabNavigator = () => {
           height: verticalScale(55) + insets.bottom,
           paddingBottom: insets.bottom,
           paddingTop: verticalScale(8),
-          borderTopWidth: 0.5,
-          borderTopColor: colors.border,
         },
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
@@ -34,6 +32,7 @@ const BottomTabNavigator = () => {
           fontWeight: '600',
           marginBottom: verticalScale(3),
         },
+        contentStyle: { flex: 1 } // Ensure full height for tab content
       }}>
       <Tab.Screen
         name="Home"

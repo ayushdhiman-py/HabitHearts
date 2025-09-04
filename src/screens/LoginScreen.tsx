@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Image, Platform } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../context/AuthContext';
@@ -22,13 +22,30 @@ GoogleSignin.configure({
 const LoginScreen = () => {
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [isSignInReady, setIsSignInReady] = useState(false);
 
-  const signIn = async (retryCount = 0) => {
+  // Check for Play Services on mount to "warm up" the module and prevent "activity is null"
+  useEffect(() => {
+    const checkPlayServices = async () => {
+      try {
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        setIsSignInReady(true);
+      } catch (error: any) {
+        if (error.code !== statusCodes.SIGN_IN_CANCELLED) {
+            Alert.alert('Play Services Error', 'Google Play Services is not available or outdated on this device.');
+        }
+      }
+    };
+    checkPlayServices();
+  }, []);
+
+  const signIn = async () => {
+    if (!isSignInReady) {
+      Alert.alert('Initialization', 'Google Sign-In is not ready yet, please wait a moment.');
+      return;
+    }
     try {
       setLoading(true);
-      console.log('Attempting to check Play Services...');
-      await GoogleSignin.hasPlayServices();
-      console.log('Play Services available, proceeding with sign in...');
       
       // Sign in with Google
       const { data } = await GoogleSignin.signIn();
@@ -36,9 +53,8 @@ const LoginScreen = () => {
       
       if (!data?.idToken) {
         console.log('No ID token received from Google Sign-In');
-        setTimeout(() => {
-          Alert.alert('Sign In Failed', 'Could not get authentication token from Google. Please try again.');
-        }, 100);
+        Alert.alert('Sign In Failed', 'Could not get authentication token from Google. Please try again.');
+        setLoading(false); // Manually set loading false here
         return;
       }
       
@@ -59,69 +75,16 @@ const LoginScreen = () => {
       
       console.log('User successfully signed in to Firebase');
     } catch (error: any) {
-      // Handle "activity is null" error with retry mechanism
-      if (error?.message && error.message.includes('activity is null') && retryCount < 2) {
-        console.log(`Retrying sign in (attempt ${retryCount + 1})...`);
-        setTimeout(() => {
-          signIn(retryCount + 1);
-        }, 1000);
-        return;
-      }
-      // It's crucial to log the error for debugging
+      // No need to log full error object in production, but useful for debug
       console.log('Google Sign-In Error:', error);
-      console.log('Error type:', typeof error);
-      console.log('Error keys:', Object.keys(error || {}));
-
-      // Handle both string and object errors
-      const errorMessage = error?.message || error?.code || JSON.stringify(error);
       
-      if (error?.code === statusCodes.SIGN_IN_CANCELLED) {
-        // This is not really an error, the user just cancelled the process
-      } else if (error?.code === statusCodes.IN_PROGRESS) {
-        // Use a fallback alert mechanism for Android
-        try {
-          setTimeout(() => {
-            Alert.alert('In Progress', 'Google Sign-In is already in progress.');
-          }, 100);
-        } catch (alertError) {
-          console.log('Alert error:', alertError);
-          // Fallback to console logging
-        }
-      } else if (error?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        try {
-          setTimeout(() => {
-            Alert.alert('Play Services Error', 'Google Play Services is not available or outdated on this device.');
-          }, 100);
-        } catch (alertError) {
-          console.log('Alert error:', alertError);
-        }
-      } else if (error?.message && error.message.includes('Network request failed')) {
-        try {
-          setTimeout(() => {
-            Alert.alert('Network Error', 'Could not connect to the authentication service.');
-          }, 100);
-        } catch (alertError) {
-          console.log('Alert error:', alertError);
-        }
-      } else if (error?.message && error.message.includes('activity is null')) {
-        try {
-          setTimeout(() => {
-            Alert.alert('Sign-In Error', 'There was an issue with the sign-in process. Please try again.');
-          }, 100);
-        } catch (alertError) {
-          console.log('Alert error:', alertError);
-        }
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User cancelled the login flow, do nothing
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        Alert.alert('In Progress', 'Google Sign-In is already in progress.');
       } else {
         // Some other error happened
-        try {
-          setTimeout(() => {
-            Alert.alert('Google Sign-In Error', `An unexpected error occurred: ${errorMessage}. Check the Metro console for the full error message.`);
-          }, 100);
-        } catch (alertError) {
-          console.log('Alert error:', alertError);
-          // Fallback to console logging
-          console.log('Google Sign-In Error (fallback):', errorMessage);
-        }
+        Alert.alert('Google Sign-In Error', 'An unexpected error occurred during sign-in. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -143,7 +106,7 @@ const LoginScreen = () => {
           <TouchableOpacity 
             style={[globalStyles.button, styles.signInButton, loading && globalStyles.disabledButton]} 
             onPress={signIn}
-            disabled={loading}
+            disabled={loading || !isSignInReady}
           >
             {loading ? (
               <ActivityIndicator color={colors.textLight} size="small" />

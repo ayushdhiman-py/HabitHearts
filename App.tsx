@@ -4,7 +4,9 @@ import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { auth } from './firebaseConfig';
 import { StatusBar, Platform } from 'react-native';
-import colors from './src/theme/colors';
+import { premiumColors } from './src/theme/premiumTheme';
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const App = () => {
   useEffect(() => {
@@ -22,16 +24,16 @@ const App = () => {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <StatusBar 
-        barStyle="dark-content" 
-        backgroundColor={colors.red} 
-        translucent={false}
-      />
-      <AuthProvider>
-        <AppNavigator />
-      </AuthProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <StatusBar 
+          barStyle="dark-content" 
+        />
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 };
 
