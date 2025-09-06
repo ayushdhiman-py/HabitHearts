@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useReducer } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, ActivityIndicator, ScrollView, FlatList, Animated, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { subscribeToCalendarEventsForUserAndLinked, createCalendarEvent, deleteCalendarEvent, CalendarEvent } from '../services/calendarService';
+import { subscribeToCalendarEventsForUserAndLinked, createCalendarEvent, deleteCalendarEvent, updateCalendarEvent, CalendarEvent } from '../services/calendarService';
 import { getLinkedUsers } from '../services/userService';
 import { notificationService } from '../services/notificationService';
 import colors from '../theme/colors';
@@ -10,6 +10,7 @@ import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
+import EnhancedEventItem from '../components/home/EnhancedEventItem';
 
 interface LinkedUser {
   uid: string;
@@ -45,6 +46,14 @@ const CalendarScreen = () => {
   const [endHour, setEndHour] = useState(0); // Default end hour (0-23)
   const [endMinute, setEndMinute] = useState(0); // Default end minute (0,15,30,45)
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('month');
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [editEventTitle, setEditEventTitle] = useState('');
+  const [editEventEmoji, setEditEventEmoji] = useState('🎯');
+  const [editStartHour, setEditStartHour] = useState(0);
+  const [editStartMinute, setEditStartMinute] = useState(0);
+  const [editEndHour, setEditEndHour] = useState(0);
+  const [editEndMinute, setEditEndMinute] = useState(0);
+  const [editModalVisible, setEditModalVisible] = useState(false);
   
   // Memoized callbacks for time picker value changes
   const handleStartHourChange = useCallback((value: number) => {
@@ -384,107 +393,81 @@ const CalendarScreen = () => {
     );
   };
 
-  const EventItem = React.memo(({ item }: { item: CalendarEvent }) => {
-    // Handle both string and Date formats for the date property with error handling
-    let eventDate: Date;
-    let eventEndDate: Date | null = null;
-
-    try {
-      if (item.date && typeof item.date === 'object' && 'seconds' in item.date) {
-        // It's a Firebase Timestamp
-        eventDate = new Date((item.date as any).seconds * 1000);
-      } else if (item.date instanceof Date) {
-        eventDate = item.date;
-      } else if (typeof item.date === 'string') {
-        // Try different parsing approaches
-        if (item.date.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
-          // ISO string format
-          eventDate = new Date(item.date);
-        } else if (item.date.match(/^\d{4}-\d{2}-\d{2}/)) {
-          // Date-only string format (YYYY-MM-DD)
-          const parts = item.date.split('-');
-          if (parts.length === 3) {
-            eventDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-          } else {
-            throw new Error('Invalid date format');
-          }
-        } else {
-          // Try to parse as a general date string
-          eventDate = new Date(item.date);
-        }
-      } else {
-        // Fallback to current date if we can't parse the date
-        eventDate = new Date();
-      }
-
-      // Check if the date is valid
-      if (isNaN(eventDate.getTime())) {
-        eventDate = new Date();
-      }
-
-      // Handle end date if it exists
-      if (item.endDate) {
-        if (item.endDate && typeof item.endDate === 'object' && 'seconds' in item.endDate) {
-          // It's a Firebase Timestamp
-          eventEndDate = new Date((item.endDate as any).seconds * 1000);
-        } else if (item.endDate instanceof Date) {
-          eventEndDate = item.endDate;
-        } else if (typeof item.endDate === 'string') {
-          // Try different parsing approaches
-          if (item.endDate.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
-            // ISO string format
-            eventEndDate = new Date(item.endDate);
-          } else if (item.endDate.match(/^\d{4}-\d{2}-\d{2}/)) {
-            // Date-only string format (YYYY-MM-DD)
-            const parts = item.endDate.split('-');
-            if (parts.length === 3) {
-              eventEndDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-            }
-          } else {
-            // Try to parse as a general date string
-            eventEndDate = new Date(item.endDate);
-          }
-        }
-
-        // Validate end date
-        if (eventEndDate && isNaN(eventEndDate.getTime())) {
-          eventEndDate = null;
-        }
-      }
-    } catch (error) {
-      eventDate = new Date();
-      eventEndDate = null;
-    }
-
-    const isOwnEvent = item.createdBy === user.uid;
-
-    // Format time for display
-    const timeString = eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const endTimeString = eventEndDate ? eventEndDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
-
-    return (
-      <View style={[styles.eventItem, !isOwnEvent && styles.sharedEventItem]}>
-        <Text style={styles.eventTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.eventTime}>
-          {item.startTime && item.endTime ? `${item.startTime} - ${item.endTime}` : timeString}
-        </Text>
-        {item.createdBy !== user.uid && (
-          <Text style={styles.creatorText} numberOfLines={1}>by {item.creatorName || 'Someone'}</Text>
-        )}
-      </View>
-    );
-  }, (prevProps, nextProps) => {
-    // Custom comparison function for React.memo
-    return prevProps.item.id === nextProps.item.id &&
-      prevProps.item.title === nextProps.item.title &&
-      prevProps.item.date === nextProps.item.date &&
-      prevProps.item.endDate === nextProps.item.endDate &&
-      prevProps.item.createdBy === nextProps.item.createdBy &&
-      prevProps.item.creatorName === nextProps.item.creatorName;
-  });
-
   const renderEvent = ({ item }: { item: CalendarEvent }) => {
-    return <EventItem item={item} />;
+    return (
+      <EnhancedEventItem
+        item={item}
+        user={user}
+        onOpenEventDetail={openEventDetail}
+        onDeleteEvent={handleDeleteEvent}
+        onToggleEvent={toggleEvent}
+      />
+    );
+  };
+
+  const toggleEvent = async (eventItem: CalendarEvent) => {
+    try {
+      // Update the event with the opposite completed status
+      await updateCalendarEvent(eventItem.id, {
+        completed: !eventItem.completed,
+        updatedAt: new Date() as any
+      });
+    } catch (error) {
+      console.error('Error toggling event completion:', error);
+      Alert.alert('Error', 'Failed to update event. Please try again.');
+    }
+  };
+
+  const openEventDetail = (eventItem: CalendarEvent) => {
+    setSelectedEvent(eventItem);
+    setEditEventTitle(eventItem.title);
+    setEditEventEmoji(eventItem.emoji || '🎯');
+    
+    // Parse start time if it exists
+    if (eventItem.startTime) {
+      const [hour, minute] = eventItem.startTime.split(':').map(Number);
+      setEditStartHour(hour || 0);
+      setEditStartMinute(minute || 0);
+    } else {
+      setEditStartHour(0);
+      setEditStartMinute(0);
+    }
+    
+    // Parse end time if it exists
+    if (eventItem.endTime) {
+      const [hour, minute] = eventItem.endTime.split(':').map(Number);
+      setEditEndHour(hour || 0);
+      setEditEndMinute(minute || 0);
+    } else {
+      setEditEndHour(0);
+      setEditEndMinute(0);
+    }
+    
+    setEditModalVisible(true);
+  };
+
+  const handleUpdateEvent = async () => {
+    if (!selectedEvent) return;
+    
+    try {
+      const startTimeString = `${editStartHour.toString().padStart(2, '0')}:${editStartMinute.toString().padStart(2, '0')}`;
+      const endTimeString = `${editEndHour.toString().padStart(2, '0')}:${editEndMinute.toString().padStart(2, '0')}`;
+      
+      // Update the event with new values
+      await updateCalendarEvent(selectedEvent.id, {
+        title: editEventTitle.trim(),
+        startTime: startTimeString,
+        endTime: endTimeString,
+        emoji: editEventEmoji,
+        updatedAt: new Date() as any
+      });
+      
+      setEditModalVisible(false);
+      setSelectedEvent(null);
+    } catch (error) {
+      console.error('Error updating event:', error);
+      Alert.alert('Error', 'Failed to update event. Please try again.');
+    }
   };
 
   const changeMonth = (offset: number) => {
@@ -538,6 +521,7 @@ const CalendarScreen = () => {
     const scrollViewRef = useRef<ScrollView>(null);
     const isScrolling = useRef(false);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [scrollY, setScrollY] = useState(0);
 
     // Scroll to selected item when it changes or on mount
     useEffect(() => {
@@ -561,9 +545,11 @@ const CalendarScreen = () => {
     }, [selectedValue, items]);
 
     const handleScroll = (event: any) => {
+      const y = event.nativeEvent.contentOffset.y;
+      setScrollY(y);
+      
       if (!isScrolling.current) return;
       
-      const y = event.nativeEvent.contentOffset.y;
       // Adjust for the top padding (40px)
       const adjustedY = Math.max(0, y);
       // Calculate index with proper rounding
@@ -598,8 +584,11 @@ const CalendarScreen = () => {
     const handleMomentumScrollEnd = (event: any) => {
       isScrolling.current = false;
       
-      // Calculate the final position
+      // Update scroll position
       const y = event.nativeEvent.contentOffset.y;
+      setScrollY(y);
+      
+      // Calculate the final position
       const adjustedY = Math.max(0, y);
       
       // Determine the closest item
@@ -619,6 +608,16 @@ const CalendarScreen = () => {
         }
       }
     };
+
+    // Function to determine if an item should have transparent text
+  const isItemTransparent = (index: number) => {
+    // Calculate the position of this item's top edge
+    // Each item is 40px tall, and there's 40px padding at the top
+    const itemTopPosition = (index * itemHeight) + 40;
+    
+    // If the item's top edge is above the scroll position, it's scrolled out
+    return itemTopPosition < scrollY;
+  };
 
     return (
       <View style={{
@@ -667,6 +666,7 @@ const CalendarScreen = () => {
                 fontSize: 16,
                 color: item === selectedValue ? colors.text : colors.textSecondary,
                 fontWeight: item === selectedValue ? '600' : 'normal',
+                opacity: isItemTransparent(index) ? 0 : 1,
               }}>
                 {item.toString().padStart(2, '0')}
               </Text>
@@ -944,16 +944,17 @@ const CalendarScreen = () => {
 
   return (
     <View style={[globalStyles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
+        <Text style={styles.title}>Your Events</Text>
+        <TouchableOpacity
+          style={styles.headerAddButton}
+          onPress={openAddEventModal}
+        >
+          <Icon name="add" size={responsiveFontSize(24)} color={colors.textLight} />
+        </TouchableOpacity>
+      </View>
       <ScrollView style={styles.mainScrollView}>
-        <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
-          <Text style={styles.title}>Your Events</Text>
-          <TouchableOpacity
-            style={styles.headerAddButton}
-            onPress={openAddEventModal}
-          >
-            <Icon name="add" size={responsiveFontSize(24)} color={colors.textLight} />
-          </TouchableOpacity>
-        </View>
+        <View style={{ marginTop: verticalScale(16) }}>
 
         {/* View Mode Selector */}
         <View style={styles.viewModeContainer}>
@@ -1028,6 +1029,7 @@ const CalendarScreen = () => {
             </View>
           )}
         </View>
+      </View>
       </ScrollView>
 
       {/* Add Event Modal */}
@@ -1155,6 +1157,130 @@ const CalendarScreen = () => {
                 ) : (
                   <Text style={globalStyles.buttonText}>Add Event</Text>
                 )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+      
+      {/* Edit Event Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={editModalVisible}
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalContainer}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              Edit Event
+            </Text>
+            <TextInput
+              style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
+              placeholder="Event title"
+              value={editEventTitle}
+              onChangeText={setEditEventTitle}
+              autoFocus={true}
+            />
+
+            {/* Emoji Selection */}
+            <View style={styles.emojiSelectionContainer}>
+              <Text style={styles.emojiSelectionTitle}>Choose an Emoji:</Text>
+              <ScrollView
+                showsHorizontalScrollIndicator={false}
+                style={styles.emojiScrollView}
+                contentContainerStyle={styles.emojiScrollContent}
+                horizontal={true}
+              >
+                <View style={styles.emojiRowContainer}>
+                  <View style={styles.emojiRow}>
+                    {[
+                      // Row 1 - Events, Activities, Objects
+                      '🎯', '🎉', '🥳', '🎊', '🎂', '🎁', '🎈', '🎆', '🎇', '🧨',
+                      '✨', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎬', '🎭', '🎨',
+                      '🎪', '🎫', '🎟️', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
+                      '🎤', '🎧', '🎮', '🎲', '♟️', '⚽', '🏀', '🏈', '⚾', '🎾',
+                      '🏐', '🏉', '🎱', '🪀', '🏓', '🏸', '🥅', '⛳', '🪁', '🏹',
+                      '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '⛸️', '🥌', '🎿',
+                      '⛷️', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️',
+                      '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆'
+                    ].map((emoji, index) => (
+                      <TouchableOpacity
+                        key={`edit-row1-${emoji}-${index}`}
+                        style={[
+                          styles.emojiOption,
+                          editEventEmoji === emoji && styles.selectedEmoji
+                        ]}
+                        onPress={() => setEditEventEmoji(emoji)}
+                      >
+                        <Text style={styles.emojiOptionText}>{emoji}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={styles.emojiRow}>
+                    {[
+                      // Row 2 - Food, Nature, Faces, Hearts
+                      '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒',
+                      '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬',
+                      '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐',
+                      '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇',
+                      '🥓', '🥩', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪',
+                      '🥗', '🍿', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍮', '🎂',
+                      '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
+                      '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚'
+                    ].map((emoji, index) => (
+                      <TouchableOpacity
+                        key={`edit-row2-${emoji}-${index}`}
+                        style={[
+                          styles.emojiOption,
+                          editEventEmoji === emoji && styles.selectedEmoji
+                        ]}
+                        onPress={() => setEditEventEmoji(emoji)}
+                      >
+                        <Text style={styles.emojiOptionText}>{emoji}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Time Selection */}
+            <View style={styles.timeSelectionContainer}>
+              <Text style={styles.timeSelectionTitle}>Select Time:</Text>
+              <View style={styles.timePickerHeaders}>
+                <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>From:</Text>
+                <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>To:</Text>
+              </View>
+              <View style={styles.timePickerLayout}>
+                <View style={styles.timePickerGroup}>
+                  {renderTimePicker(getDayHours(), editStartHour, (value) => setEditStartHour(value))}
+                  <Text style={styles.timePickerSeparator}>:</Text>
+                  {renderTimePicker(getMinutes(), editStartMinute, (value) => setEditStartMinute(value))}
+                </View>
+                <View style={styles.timePickerGroup}>
+                  {renderTimePicker(getDayHours(), editEndHour, (value) => setEditEndHour(value))}
+                  <Text style={styles.timePickerSeparator}>:</Text>
+                  {renderTimePicker(getMinutes(), editEndMinute, (value) => setEditEndMinute(value))}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[globalStyles.button, globalStyles.outlineButton, styles.modalButton]}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={[globalStyles.buttonText, globalStyles.outlineButtonText]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[globalStyles.button, styles.modalButton]}
+                onPress={handleUpdateEvent}
+              >
+                <Text style={globalStyles.buttonText}>Update Event</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1534,7 +1660,7 @@ const styles = StyleSheet.create({
   timeSelectionContainer: {
     paddingHorizontal: moderateScale(8),
     width: '100%',
-    paddingTop: verticalScale(4), // Add some padding at the top
+    paddingTop: verticalScale(4),
   },
   timeSelectionTitle: {
     fontSize: responsiveFontSize(15),
@@ -1545,18 +1671,23 @@ const styles = StyleSheet.create({
   },
   timePickerHeaders: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: verticalScale(8),
-    marginHorizontal: moderateScale(0),
+    justifyContent: 'flex-start',
+    gap: scale(20),
+    marginBottom: -verticalScale(20),
+    zIndex: 100,
+    position: 'relative',
+    height: verticalScale(30),
   },
   timePickerHeader: {
     flex: 1,
     textAlign: 'center',
-    backgroundColor: colors.glassMint,
+    backgroundColor: '#f8f8f8ff',
     paddingVertical: verticalScale(4),
-    paddingHorizontal: moderateScale(6),
+    marginHorizontal: moderateScale(14),
     borderRadius: moderateScale(8),
     minWidth: scale(80),
+    zIndex: 100,
+    position: 'relative',
   },
   timePickerLayout: {
     flexDirection: 'row',
@@ -1568,6 +1699,7 @@ const styles = StyleSheet.create({
   timePickerGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: verticalScale(90),
   },
   timePickerSeparator: {
     fontSize: responsiveFontSize(20),
@@ -1588,7 +1720,7 @@ const styles = StyleSheet.create({
     padding: moderateScale(12),
   },
   eventsSection: {
-    marginTop: verticalScale(20),
+    marginTop: verticalScale(16),
     paddingHorizontal: scale(16),
     paddingBottom: verticalScale(20),
     backgroundColor: colors.surface,
@@ -1706,7 +1838,8 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     marginHorizontal: scale(6),
-    paddingVertical: verticalScale(10),
+    paddingVertical: verticalScale(8),
+    minHeight: 0,
   },
 });
 

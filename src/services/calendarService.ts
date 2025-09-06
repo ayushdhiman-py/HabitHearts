@@ -20,6 +20,7 @@ export interface CalendarEvent {
   endDate?: Date | { seconds: number } | string;
   startTime?: string; // Added startTime field
   endTime?: string; // Added endTime field
+  completed?: boolean; // Added completed field
   createdBy: string;
   creatorName: string;
   createdAt: Timestamp;

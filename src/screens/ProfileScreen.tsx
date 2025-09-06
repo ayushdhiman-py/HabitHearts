@@ -120,11 +120,11 @@ const ProfileScreen = () => {
 
   return (
     <View style={[globalStyles.container, { paddingTop: insets.top }]}>
-      <ScrollView style={globalStyles.flex1}>
-        <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
-          <Text style={styles.title}>Profile</Text>
-        </View>
-        
+      <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
+        <Text style={styles.title}>Profile</Text>
+      </View>
+      
+      <ScrollView style={globalStyles.flex1} contentContainerStyle={{ marginTop: verticalScale(16) }}>
         {loading ? (
           <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
             <ActivityIndicator size="large" color={colors.electricBlue} />
@@ -224,10 +224,26 @@ const ProfileScreen = () => {
 
 const styles = StyleSheet.create({
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: scale(16),
     paddingVertical: verticalScale(12),
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  headerAddButton: {
+    padding: scale(12),
+    backgroundColor: colors.electricBlue,
+    borderRadius: moderateScale(16),
+    shadowColor: colors.electricBlue,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   title: {
     fontSize: responsiveFontSize(22),
