@@ -8,7 +8,8 @@ import {
   where, 
   updateDoc,
   orderBy,
-  Timestamp
+  Timestamp,
+  onSnapshot
 } from 'firebase/firestore';
 
 export interface Goal {
@@ -44,7 +45,44 @@ export const createGoal = async (goalData: Omit<Goal, 'id' | 'createdAt' | 'upda
   }
 };
 
-// Get goals for a user and their linked users
+// Get goals for a user and their linked users with real-time listener
+export const subscribeToGoalsForUserAndLinked = (
+  userUid: string, 
+  linkedUserUids: string[] = [],
+  callback: (goals: Goal[]) => void
+): () => void => {
+  try {
+    // Include current user and all linked users
+    const allUids = [userUid, ...linkedUserUids];
+    
+    const q = query(
+      collection(db, 'goals'),
+      where('createdBy', 'in', allUids),
+      where('status', '==', 'active'),
+      orderBy('createdAt', 'desc')
+    );
+    
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const goals: Goal[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        goals.push({ id: doc.id, ...(doc.data() as Omit<Goal, 'id'>) });
+      });
+      
+      callback(goals);
+    }, (error) => {
+      console.error('Error listening to goals:', error);
+    });
+    
+    return unsubscribe;
+  } catch (error) {
+    console.error('Error setting up goal listener:', error);
+    throw error;
+  }
+};
+
+// Get goals for a user and their linked users (for backward compatibility)
 export const getGoalsForUserAndLinked = async (userUid: string, linkedUserUids: string[] = []): Promise<Goal[]> => {
   try {
     // Include current user and all linked users

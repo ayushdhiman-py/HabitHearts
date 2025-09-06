@@ -1,71 +1,71 @@
-export default {
-  // Ultra vibrant and bold color palette (4 core colors + variations)
-  
-  // Electric Red - Primary color for main actions and highlights
-  primary: '#FF3838',           // Electric Red
-  primaryLight: '#FF6B6B',      // Bright Red
-  primaryDark: '#E53232',       // Deep Red
-  
-  // Electric Blue - Secondary color for accents and complements
-  secondary: '#1E90FF',         // Dodger Blue
-  secondaryLight: '#4AAEFF',    // Light Blue
-  secondaryDark: '#1B81E5',     // Deep Blue
-  
-  // Clean White - Background and surfaces
-  background: '#FFFFFF',        // Clean White
-  surface: '#FFFFFF',           // Clean White
-  
-  // Charcoal - Text and important elements
-  text: '#1A1A1A',              // Deep Charcoal
-  textSecondary: '#4D4D4D',     // Medium Gray
-  textLight: '#FFFFFF',         // White text
-  
-  // Status and utility colors
-  success: '#00CC66',           // Electric Green for success
-  successDark: '#00B359',
-  error: '#FF3838',             // Electric Red for error
-  errorDark: '#E53232',
-  warning: '#FFCC00',           // Electric Yellow
-  info: '#1E90FF',              // Electric Blue (same as secondary)
-  orange: '#FF6600',            // Electric Orange
-  yellow: '#FFCC00',            // Electric Yellow
 
-  successLight: '#E6F9F0',
-  errorLight: '#FFE6E6',
-  orangeLight: '#FFF0E6',
-  yellowLight: '#FFF9E6',
+// Bright and punchy color palette for a minimal, thematic design
+export default {
+  // Core bright colors
+  primary: '#6200EE',
+  electricBlue: '#00D4FF',      // Bright Cyan
+  hotPink: '#FF2B9D',           // Hot Pink
+  electricGreen: '#00FF9D',     // Bright Green
+  vibrantOrange: '#FF6B00',     // Vibrant Orange
+  brightPurple: '#9D4AFF',      // Bright Purple
+  sunnyYellow: '#FFD400',       // Sunny Yellow
+  brightRed: '#FF2B2B',         // Bright Red
+  mint: '#2BFFD4',              // Mint
   
-  // Border and divider
-  border: '#CCCCCC',            // Medium Gray
-  divider: '#E6E6E6',           // Light Gray
+  // Light variations for backgrounds
+  electricBlueLight: '#E6FAFF',
+  hotPinkLight: '#FFE6F5',
+  electricGreenLight: '#E6FFF5',
+  vibrantOrangeLight: '#FFF0E6',
+  brightPurpleLight: '#F5E6FF',
+  sunnyYellowLight: '#FFFBE6',
+  brightRedLight: '#FFE6E6',
+  mintLight: '#E6FFFA',
   
-  // Neutral tones
+  // Dark variations for text and details
+  electricBlueDark: '#0099B8',
+  hotPinkDark: '#B81F71',
+  electricGreenDark: '#00B871',
+  vibrantOrangeDark: '#B84D00',
+  brightPurpleDark: '#7136B8',
+  sunnyYellowDark: '#B89900',
+  brightRedDark: '#B81F1F',
+  mintDark: '#1FB899',
+  
+  // Neutrals for contrast
+  background: '#FFFFFF',
+  surface: '#FFFFFF',
+  text: '#212121',
+  textSecondary: '#666666',
+  textLight: '#FFFFFF',
+  border: '#E0E0E0',
   white: '#FFFFFF',
   black: '#000000',
-  gray50: '#FAFAFA',
-  gray100: '#F5F5F5',
-  gray200: '#EEEEEE',
-  gray300: '#E0E0E0',
-  gray400: '#BDBDBD',
-  gray500: '#9E9E9E',
-  gray600: '#757575',
-  gray700: '#616161',
-  gray800: '#424242',
-  gray900: '#212121',
-};
+  
+  // Custom background colors for task items
+  taskCompletedBackground: '#E6FFF5', // Light green
+  taskOverdueBackground: '#FFE6E6',   // Light red
 
-// Additional colors for specific use cases
-export const premiumColors = {
-  gold: '#FFD700',
-  purple: '#9932CC',
-  blue: '#00BFFF',
+  // Status colors
+  success: '#00FF9D',
+  successDark: '#00B871',
+  error: '#FF2B2B',
+  errorDark: '#B81F1F',
+  warning: '#FFD400',
+  warningDark: '#B89900',
+  info: '#00D4FF',
+  infoDark: '#0099B8',
+  
+  // Glass effect colors (semi-transparent)
+  glassBlue: 'rgba(0, 212, 255, 0.2)',
+  glassPink: 'rgba(255, 43, 157, 0.2)',
+  glassGreen: 'rgba(0, 255, 157, 0.2)',
+  glassOrange: 'rgba(255, 107, 0, 0.2)',
+  glassPurple: 'rgba(157, 74, 255, 0.2)',
+  glassYellow: 'rgba(255, 212, 0, 0.2)',
+  glassRed: 'rgba(255, 43, 43, 0.2)',
+  glassMint: 'rgba(43, 255, 212, 0.2)',
+  
+  // Streak highlight
+  streakHighlight: '#FFD400',   // Sunny Yellow for streaks
 };
-
-// Colors for charts and graphs
-export const chartColors = [
-  '#FF3838', // Primary
-  '#1E90FF', // Secondary
-  '#FFCC00', // Warning
-  '#4AAEFF', // Secondary Light
-  '#FF6B6B', // Primary Light
-];

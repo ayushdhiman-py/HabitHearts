@@ -15,7 +15,7 @@ import {
   Platform,
   Animated,
   Image,
-  InteractionManager
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
@@ -23,11 +23,12 @@ import { subscribeToTasksForUserAndLinked, createTask, updateTask, deleteTask, t
 import { getLinkedUsers, User as UserServiceUser } from '../services/userService';
 import { subscribeToCalendarEventsForUserAndLinked, CalendarEvent } from '../services/calendarService';
 import { notificationService } from '../services/notificationService';
-import { getGoalsForUserAndLinked } from '../services/goalService';
+import { getGoalsForUserAndLinked, subscribeToGoalsForUserAndLinked } from '../services/goalService';
 import { getGoalsProgress, updateGoalProgress, GoalProgress } from '../services/goalProgressService';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
+import DatePicker from 'react-native-date-picker';
 import { getTextColorForBackground } from '../utils/colorUtils';
 
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -35,6 +36,9 @@ import SnappingCarousel, { SnappingCarouselRef } from '../components/SnappingCar
 import { Timestamp } from 'firebase/firestore';
 import EnhancedTaskItem from '../components/home/EnhancedTaskItem';
 import { swipeableManager } from '../utils/swipeableManager';
+
+// Reanimated imports
+import Reanimated from 'react-native-reanimated';
 
 // Conditional import for DateTimePicker
 let DateTimePicker: any = null;
@@ -53,10 +57,25 @@ interface User {
 const HEADER_HEIGHT = verticalScale(60);
 
 const getDarkerColor = (hexColor: string, factor: number = 0.8): string => {
+  if (hexColor.startsWith('rgb')) {
+    return hexColor;
+  }
+  // If it's already a dark color or a predefined dark color, return as is
+  if (hexColor.includes('Dark')) {
+    return hexColor;
+  }
+  
   // Convert hex to RGB
-  const r = parseInt(hexColor.slice(1, 3), 16);
-  const g = parseInt(hexColor.slice(3, 5), 16);
-  const b = parseInt(hexColor.slice(5, 7), 16);
+  let r, g, b;
+  if (hexColor.length === 4) {
+    r = parseInt(hexColor[1] + hexColor[1], 16);
+    g = parseInt(hexColor[2] + hexColor[2], 16);
+    b = parseInt(hexColor[3] + hexColor[3], 16);
+  } else {
+    r = parseInt(hexColor.slice(1, 3), 16);
+    g = parseInt(hexColor.slice(3, 5), 16);
+    b = parseInt(hexColor.slice(5, 7), 16);
+  }
 
   // Darken each component
   const darkR = Math.floor(r * factor);
@@ -65,6 +84,21 @@ const getDarkerColor = (hexColor: string, factor: number = 0.8): string => {
 
   return `rgb(${darkR}, ${darkG}, ${darkB})`;
 };
+
+// Helper function to get a random bright color for heatmap
+const getRandomBrightColor = () => {
+    const brightColors = [
+      { light: colors.electricBlueLight, dark: colors.electricBlueDark },
+      { light: colors.hotPinkLight, dark: colors.hotPinkDark },
+      { light: colors.electricGreenLight, dark: colors.electricGreenDark },
+      { light: colors.vibrantOrangeLight, dark: colors.vibrantOrangeDark },
+      { light: colors.brightPurpleLight, dark: colors.brightPurpleDark },
+      { light: colors.sunnyYellowLight, dark: colors.sunnyYellowDark },
+      { light: colors.brightRedLight, dark: colors.brightRedDark },
+      { light: colors.mintLight, dark: colors.mintDark }
+    ];
+    return brightColors[Math.floor(Math.random() * brightColors.length)];
+  };
 
 const MainHomeScreen = () => {
   const { user } = useAuth() as { user: User | null };
@@ -92,17 +126,25 @@ const MainHomeScreen = () => {
   const [newTaskText, setNewTaskText] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskDate, setNewTaskDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [tempSelectedDate, setTempSelectedDate] = useState(new Date());
+  // For task detail modal date/time picker
+  const [showTaskDetailDatePicker, setShowTaskDetailDatePicker] = useState(false);
+  const [showTaskDetailTimePicker, setShowTaskDetailTimePicker] = useState(false);
+  // For add task modal date/time picker
+  const [showAddTaskDatePicker, setShowAddTaskDatePicker] = useState(false);
+  const [showAddTaskTimePicker, setShowAddTaskTimePicker] = useState(false);
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
   const [datePickerMode, setDatePickerMode] = useState<'date' | 'time'>('date');
   const [goals, setGoals] = useState<any[]>([]);
   const [goalsProgress, setGoalsProgress] = useState<Record<string, GoalProgress[]>>({});
+  const [heatmapColors, setHeatmapColors] = useState<Record<string, {light: string, dark: string}>>({});
+  // For date/time selection in modals
+  const [tempSelectedDate, setTempSelectedDate] = useState(new Date());
   const tasksUnsubscribeRef = useRef<(() => void) | null>(null);
+  const goalsUnsubscribeRef = useRef<(() => void) | null>(null);
   const eventsUnsubscribeRef = useRef<(() => void) | null>(null);
   const heatmapDaysRef = useRef<any[]>([]);
   const heatmapCarouselRef = useRef<SnappingCarouselRef>(null);
-  const daySelectorRef = useRef<ScrollView>(null);
+  const monthScrollViewRef = useRef<ScrollView>(null);
   const [isReturningToToday, setIsReturningToToday] = useState(false);
   const runnerAnimation = useRef(new Animated.Value(0)).current;
   const todayPulseAnimation = useRef(new Animated.Value(1)).current;
@@ -127,8 +169,6 @@ const MainHomeScreen = () => {
   // For heatmap cell animations
   const scaleValue = useRef(new Animated.Value(1)).current;
 
-
-
   const fetchLinkedUsers = useCallback(async () => {
     if (user) {
       try {
@@ -144,44 +184,35 @@ const MainHomeScreen = () => {
     return [];
   }, [user]);
 
-  const fetchGoals = useCallback(async () => {
-    if (user) {
-      try {
-        const linkedUids = await fetchLinkedUsers();
-        const fetchedGoals = await getGoalsForUserAndLinked(user?.uid, linkedUids);
-        setGoals(fetchedGoals);
-
-        // Fetch progress data for all goals
-        if (fetchedGoals.length > 0) {
-          const goalIds = fetchedGoals.map(goal => goal.id);
-          const progressData = await getGoalsProgress(goalIds, user?.uid);
-
-          // Group progress by goalId
-          const progressByGoal: Record<string, GoalProgress[]> = {};
-          progressData.forEach(progress => {
-            if (!progressByGoal[progress.goalId]) {
-              progressByGoal[progress.goalId] = [];
-            }
-            progressByGoal[progress.goalId].push(progress);
-          });
-
-          setGoalsProgress(progressByGoal);
-        }
-      } catch (error) {
-        console.error('Error fetching goals:', error);
-      }
-    }
-  }, [user, fetchLinkedUsers]);
-
   // Refresh heatmap days when goals change
   useEffect(() => {
-    heatmapDaysRef.current = generateCalendarDaysForHeatmap();
+    const newDays = generateCalendarDaysForHeatmap();
+    heatmapDaysRef.current = newDays;
+    console.log('Heatmap days updated:', newDays.length);
+    
+    // Generate random colors for each goal heatmap
+    const newHeatmapColors: Record<string, {light: string, dark: string}> = {};
+    goals.forEach(goal => {
+      if (!heatmapColors[goal.id]) {
+        newHeatmapColors[goal.id] = getRandomBrightColor();
+      }
+    });
+    
+    if (Object.keys(newHeatmapColors).length > 0) {
+      setHeatmapColors(prev => ({ ...prev, ...newHeatmapColors }));
+    }
   }, [goals]);
 
   // Initialize heatmap days
   useEffect(() => {
-    if (heatmapDaysRef.current.length === 0) {
-      heatmapDaysRef.current = generateCalendarDaysForHeatmap();
+    console.log('Initializing heatmap days...');
+    if (!heatmapDaysRef.current || heatmapDaysRef.current.length === 0) {
+      console.log('Heatmap days not initialized, generating...');
+      const newDays = generateCalendarDaysForHeatmap();
+      heatmapDaysRef.current = newDays;
+      console.log('Heatmap days initialized:', newDays.length);
+    } else {
+      console.log('Heatmap days already initialized:', heatmapDaysRef.current.length);
     }
   }, []);
 
@@ -210,10 +241,14 @@ const MainHomeScreen = () => {
   }, [todayPulseAnimation]);
 
   const scrollToSelectedDay = (dayIndex: number) => {
-    if (daySelectorRef.current) {
-      const itemWidth = verticalScale(36) + scale(6); // day circle width + margin
-      const scrollTo = dayIndex * itemWidth;
-      daySelectorRef.current.scrollTo({ x: scrollTo, animated: true });
+    if (monthScrollViewRef.current) {
+      const itemWidth = verticalScale(44) + scale(8); // day circle width + margin
+      // Get the width of the ScrollView container
+      const scrollViewWidth = Dimensions.get('window').width - scale(32); // Account for paddingHorizontal
+      // Calculate the offset to center the item
+      const centerOffset = (scrollViewWidth - itemWidth) / 2;
+      const scrollTo = dayIndex * itemWidth - centerOffset;
+      monthScrollViewRef.current?.scrollTo({ x: scrollTo, animated: true });
     }
   };
 
@@ -241,7 +276,8 @@ const MainHomeScreen = () => {
           return; // This effect will re-run with the new weekStartDate
         }
 
-        const scrollIndex = dayDiff - 2;
+        // For centering, we don't need to subtract 2
+        const scrollIndex = dayDiff;
         scrollToSelectedDay(scrollIndex);
         return;
       }
@@ -258,14 +294,21 @@ const MainHomeScreen = () => {
     });
   }, [selectedDate, weekStartDate]);
 
-
-
   // Handle hardware back button
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       // Check modals in reverse order of appearance (topmost first)
-      if (showDatePicker) {
-        setShowDatePicker(false);
+      if (showTaskDetailDatePicker) {
+        setShowTaskDetailDatePicker(false);
+        return true; // Prevent default back behavior
+      } else if (showTaskDetailTimePicker) {
+        setShowTaskDetailTimePicker(false);
+        return true; // Prevent default back behavior
+      } else if (showAddTaskDatePicker) {
+        setShowAddTaskDatePicker(false);
+        return true; // Prevent default back behavior
+      } else if (showAddTaskTimePicker) {
+        setShowAddTaskTimePicker(false);
         return true; // Prevent default back behavior
       } else if (selectedTask) {
         setSelectedTask(null);
@@ -278,23 +321,45 @@ const MainHomeScreen = () => {
     });
 
     return () => backHandler.remove();
-  }, [selectedTask, isAddTaskModalVisible, showDatePicker]);
+  }, [selectedTask, isAddTaskModalVisible, showTaskDetailDatePicker, showTaskDetailTimePicker, showAddTaskDatePicker, showAddTaskTimePicker]);
 
-  // Set up real-time listeners for tasks
+  // Scroll to today's date when component mounts
+  useEffect(() => {
+    const scrollToToday = () => {
+      const today = new Date();
+      const startDate = new Date(weekStartDate);
+      startDate.setHours(0, 0, 0, 0);
+
+      const timeDiff = today.getTime() - startDate.getTime();
+      const dayDiff = Math.round(timeDiff / (1000 * 3600 * 24));
+
+      // Check if today is within our 60-day range
+      if (dayDiff >= 0 && dayDiff < 60) {
+        scrollToSelectedDay(dayDiff);
+      }
+    };
+
+    // Only run the scroll positioning after interactions to avoid blocking the UI
+    InteractionManager.runAfterInteractions(() => {
+      scrollToToday();
+    });
+  }, [weekStartDate]);
+
+  // Set up real-time listeners for tasks and goals
   useEffect(() => {
     let isMounted = true;
 
-    const setupTaskListener = async () => {
+    const setupListeners = async () => {
       if (user) {
         try {
           const linkedUids = await fetchLinkedUsers();
 
-          // Fetch goals
-          await fetchGoals();
-
-          // Unsubscribe from previous listener if exists
+          // Unsubscribe from previous listeners if they exist
           if (tasksUnsubscribeRef.current) {
             tasksUnsubscribeRef.current();
+          }
+          if (goalsUnsubscribeRef.current) {
+            goalsUnsubscribeRef.current();
           }
 
           // Set up real-time listener for tasks
@@ -310,8 +375,51 @@ const MainHomeScreen = () => {
               }
             }
           );
+
+          // Set up real-time listener for goals
+          goalsUnsubscribeRef.current = subscribeToGoalsForUserAndLinked(
+            user?.uid,
+            linkedUids,
+            (fetchedGoals) => {
+              if (isMounted) {
+                setGoals(fetchedGoals);
+
+                // Initialize heatmap colors for new goals
+                setHeatmapColors(prev => {
+                  const newColors: Record<string, {light: string, dark: string}> = {};
+                  fetchedGoals.forEach(goal => {
+                    if (!prev[goal.id]) {
+                      newColors[goal.id] = getRandomBrightColor();
+                    }
+                  });
+                  return { ...prev, ...newColors };
+                });
+
+                // Fetch progress data for all goals
+                if (fetchedGoals.length > 0) {
+                  const goalIds = fetchedGoals.map(goal => goal.id);
+                  getGoalsProgress(goalIds, user?.uid).then(progressData => {
+                    // Group progress by goalId
+                    const progressByGoal: Record<string, GoalProgress[]> = {};
+                    progressData.forEach(progress => {
+                      if (!progressByGoal[progress.goalId]) {
+                        progressByGoal[progress.goalId] = [];
+                      }
+                      progressByGoal[progress.goalId].push(progress);
+                    });
+
+                    if (isMounted) {
+                      setGoalsProgress(progressByGoal);
+                    }
+                  }).catch(error => {
+                    console.error('Error fetching goals progress:', error);
+                  });
+                }
+              }
+            }
+          );
         } catch (error) {
-          console.error('Error setting up task listener:', error);
+          console.error('Error setting up listeners:', error);
           if (isMounted) {
             setLoading(false);
           }
@@ -319,15 +427,18 @@ const MainHomeScreen = () => {
       }
     };
 
-    setupTaskListener();
+    setupListeners();
 
     return () => {
       isMounted = false;
       if (tasksUnsubscribeRef.current) {
         tasksUnsubscribeRef.current();
       }
+      if (goalsUnsubscribeRef.current) {
+        goalsUnsubscribeRef.current();
+      }
     };
-  }, [user, fetchLinkedUsers, loading, fetchGoals]);
+  }, [user, fetchLinkedUsers, loading]);
 
   // Memoize the normalized selected date to avoid recalculating in filter
   const normalizedSelectedDate = useMemo(() => {
@@ -436,19 +547,27 @@ const MainHomeScreen = () => {
 
   const openTaskDetail = (taskItem: Task) => {
     setSelectedTask(taskItem);
-    setEditTaskTitle(taskItem.text);
+    setEditTaskTitle(taskItem.text);      
     setEditTaskDescription(taskItem.description || '');
+    // Initialize tempSelectedDate with the task's due date or current date
+    setTempSelectedDate(taskItem.dueDate?.toDate() || new Date());
   };
-
-
 
   const saveTaskEdits = async () => {
     if (selectedTask && user) {
       try {
+        // Use the tempSelectedDate if it has been updated, otherwise use the existing dueDate
+        const finalDueDate = tempSelectedDate;
+        
         // Optimistic update
         const updatedTasks = tasks.map(task =>
           task.id === selectedTask.id
-            ? { ...task, text: editTaskTitle, description: editTaskDescription }
+            ? { 
+                ...task, 
+                text: editTaskTitle, 
+                description: editTaskDescription,
+                dueDate: Timestamp.fromDate(finalDueDate)
+              }
             : task
         );
         setTasks(updatedTasks);
@@ -457,7 +576,7 @@ const MainHomeScreen = () => {
         await updateTask(selectedTask.id, {
           text: editTaskTitle,
           description: editTaskDescription,
-          dueDate: selectedTask.dueDate
+          dueDate: Timestamp.fromDate(finalDueDate)
         });
 
         // Close the modal
@@ -478,7 +597,7 @@ const MainHomeScreen = () => {
     const checkDate = new Date(date);
     checkDate.setHours(0, 0, 0, 0);
     return checkDate > today;
-  }
+  };
 
   const findIndexForDate = (targetDate: Date) => {
     for (let i = 0; i < 60; i++) {
@@ -525,7 +644,7 @@ const MainHomeScreen = () => {
       const scrollIndex = Math.max(0, currentIndex - 2);
       const scrollPos = scrollIndex * itemWidth;
 
-      daySelectorRef.current?.scrollTo({ x: scrollPos, animated: false });
+      monthScrollViewRef.current?.scrollTo({ x: scrollPos, animated: false });
 
       if (progress < 1) {
         requestAnimationFrame(animationLoop);
@@ -621,33 +740,19 @@ const MainHomeScreen = () => {
     return days;
   };
 
-  // Helper function to get heatmap color based on date and goal
-  const getHeatmapDateColor = (date: Date, goalId: string) => {
+  const getStartOfWeek = (date: Date) => {
+    const day = date.getDay();
+    const startDate = new Date(date);
+    startDate.setDate(date.getDate() - day);
+    startDate.setHours(0, 0, 0, 0);
+    return startDate;
+  };
+
+  const isToday = (date: Date) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const checkDate = new Date(date);
-    checkDate.setHours(0, 0, 0, 0);
-
-    // If it's a future date, show grey
-    if (checkDate > today) {
-      return styles.heatmapDateFuture;
-    }
-
-    // Check if we have progress data for this goal
-    const goalProgress = goalsProgress[goalId] || [];
-
-    // Format the date to match our progress records
-    const dateStr = checkDate.toISOString().split('T')[0];
-
-    // Find progress record for this date
-    const progressRecord = goalProgress.find(p => p.date === dateStr);
-
-    if (progressRecord) {
-      return progressRecord.completed ? styles.heatmapDateCompleted : styles.heatmapDateMissed;
-    }
-
-    // For past dates without records, show grey by default
-    return styles.heatmapDateDefault;
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
   };
 
   // Handle date press - would show options to mark as done or not
@@ -714,76 +819,6 @@ const MainHomeScreen = () => {
     }
   };
 
-  // Helper function to check if a date is today
-  const isToday = (date: Date) => {
-    const today = new Date();
-    return date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear();
-  };
-
-  // Helper function to get the start of the week (Sunday)
-  const getStartOfWeek = (date: Date) => {
-    const day = date.getDay();
-    const startDate = new Date(date);
-    startDate.setDate(date.getDate() - day);
-    startDate.setHours(0, 0, 0, 0);
-    return startDate;
-  };
-
-  // Helper function to get the end of the week (Saturday)
-  const getEndOfWeek = (date: Date) => {
-    const day = date.getDay();
-    const endDate = new Date(date);
-    endDate.setDate(date.getDate() + (6 - day));
-    endDate.setHours(23, 59, 59, 999);
-    return endDate;
-  };
-
-  // Helper function to get an array of 7 days for the current week
-  const getWeekDays = (startDate: Date) => {
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(startDate);
-      day.setDate(startDate.getDate() + i);
-      days.push(day);
-    }
-    return days;
-  };
-
-
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  const changeDate = (direction: 'prev' | 'next') => {
-    const newWeekStartDate = new Date(weekStartDate);
-    if (direction === 'prev') {
-      newWeekStartDate.setDate(newWeekStartDate.getDate() - 7);
-    } else {
-      newWeekStartDate.setDate(newWeekStartDate.getDate() + 7);
-    }
-    setWeekStartDate(newWeekStartDate);
-
-    // Also update selectedDate to the same day of week in the new week
-    const newSelectedDate = new Date(selectedDate);
-    if (direction === 'prev') {
-      newSelectedDate.setDate(newSelectedDate.getDate() - 7);
-    } else {
-      newSelectedDate.setDate(newSelectedDate.getDate() + 7);
-    }
-    setSelectedDate(newSelectedDate);
-  };
-
-
-
-
-
   // Removed skeleton loader - directly render the main content
   if (loading) {
     setLoading(false);
@@ -814,7 +849,7 @@ const MainHomeScreen = () => {
                 setNewTaskText('');
                 setNewTaskDescription('');
                 setNewTaskDate(now);
-                setTempSelectedDate(now);
+                setSelectedDate(now);
                 setIsAddTaskModalVisible(true);
               }}
             >
@@ -850,80 +885,8 @@ const MainHomeScreen = () => {
             swipeableManager.closeAll();
           }}
         >
-          {/* Search Bar */}
-          {/* <View style={styles.searchContainer}>
-            <Icon name="search" size={responsiveFontSize(20)} color={colors.textSecondary} style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search tasks..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View> */}
-
           {/* Scrollable Day Selector with Month Names and Fade Shades */}
-          {/* Today Button */}
-          <View style={{
-            flexDirection: 'row',
-            alignSelf: 'center',
-            alignItems: 'center',
-            paddingHorizontal: scale(16),
-            paddingVertical: verticalScale(6),
-            backgroundColor: colors.surface,
-            borderRadius: moderateScale(20),
-            elevation: 2,
-            shadowColor: '#2a2a2aff',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            marginTop: verticalScale(8),
-            marginBottom: verticalScale(1),
-          }}>
-            <Icon name="favorite" size={responsiveFontSize(16)} color={colors.secondary} />
-            <Text style={[styles.hiText, { marginLeft: scale(6) }]}>Hi, {user?.name || 'User'}, </Text>
-            <TouchableOpacity
-              onPress={() => {
-                const today = new Date();
-                setSelectedDate(today);
-              }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
-            >
-              <Text style={[styles.hiText, { textDecorationLine: 'none', fontWeight: '700' }]}>
-                today is 
-              </Text>
-              <Text style={[styles.hiText, { 
-                textDecorationLine: 'underline', 
-                marginLeft: scale(4),
-                fontWeight: '800'
-              }]}>
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </Text>
-              <Icon name="calendar-today" size={responsiveFontSize(14)} color={colors.secondary} style={{ marginLeft: scale(4) }} />
-            </TouchableOpacity>
-          </View>
           <View style={styles.weekSelectorContainer}>
-            <TouchableOpacity
-              style={[styles.weekNavButton, { backgroundColor: 'white', transform: [{ scale: buttonPressAnimation }] }]}
-              onPress={() => changeDate('prev')}
-              activeOpacity={0.7}
-              onPressIn={() => Animated.timing(buttonPressAnimation, {
-                toValue: 0.9,
-                duration: 100,
-                useNativeDriver: true,
-              }).start()}
-              onPressOut={() => Animated.timing(buttonPressAnimation, {
-                toValue: 1,
-                duration: 100,
-                useNativeDriver: true,
-              }).start()}
-            >
-              <Icon name="chevron-left" size={responsiveFontSize(28)} color={colors.primary} />
-            </TouchableOpacity>
-
             <View style={styles.daysScrollViewContainer}>
               {/* Left fade shade */}
               <View style={styles.leftFade} pointerEvents="none">
@@ -935,12 +898,12 @@ const MainHomeScreen = () => {
               </View>
 
               <ScrollView
-                ref={daySelectorRef}
+                ref={monthScrollViewRef}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 pagingEnabled={false}
                 decelerationRate="fast"
-                snapToInterval={verticalScale(36) + scale(6)} // day circle width + margin
+                snapToInterval={verticalScale(44) + scale(8)} // day circle width + margin
                 style={styles.weekDaysContainer}
                 contentContainerStyle={styles.weekDaysContentContainer}
               >
@@ -979,13 +942,19 @@ const MainHomeScreen = () => {
                         ]}>
                           {day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}
                         </Text>
-                        <Text style={[
-                          styles.dayNumber,
-                          isSelected && styles.selectedDayText,
-                          isTodayDate && styles.todayDayText
+                        <View style={[
+                          styles.dayInnerCircle,
+                          isSelected && styles.selectedDayInnerCircle,
+                          isTodayDate && styles.todayDayInnerCircle
                         ]}>
-                          {day.getDate()}
-                        </Text>
+                          <Text style={[
+                            styles.dayNumber,
+                            isSelected && styles.selectedDayNumber,
+                            isTodayDate && styles.todayDayNumber
+                          ]}>
+                            {day.getDate()}
+                          </Text>
+                        </View>
                       </TouchableOpacity>
                     </View>
                   );
@@ -1001,27 +970,45 @@ const MainHomeScreen = () => {
                 <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
               </View>
             </View>
-
-            <TouchableOpacity
-              style={[styles.weekNavButton, { backgroundColor: 'white', transform: [{ scale: buttonPressAnimation }] }]}
-              onPress={() => changeDate('next')}
-              activeOpacity={0.7}
-              onPressIn={() => Animated.timing(buttonPressAnimation, {
-                toValue: 0.9,
-                duration: 100,
-                useNativeDriver: true,
-              }).start()}
-              onPressOut={() => Animated.timing(buttonPressAnimation, {
-                toValue: 1,
-                duration: 100,
-                useNativeDriver: true,
-              }).start()}
-            >
-              <Icon name="chevron-right" size={responsiveFontSize(28)} color={colors.primary} />
-            </TouchableOpacity>
           </View>
 
-
+          {/* Today Button */}
+          <View style={{
+            flexDirection: 'row',
+            alignSelf: 'center',
+            alignItems: 'center',
+            paddingHorizontal: scale(16),
+            backgroundColor: 'rgba(255, 255, 255, 0.7)',
+            borderRadius: moderateScale(24),
+            marginBottom: verticalScale(20),
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.8)',
+          }}>
+            <Icon name="favorite" size={responsiveFontSize(18)} color={colors.hotPink} />
+            <Text style={[styles.hiText, { marginLeft: scale(8) }]}>Hi, {user?.name || 'User'}, </Text>
+            <TouchableOpacity
+              onPress={() => {
+                const today = new Date();
+                setSelectedDate(today);
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={[styles.hiText, { textDecorationLine: 'none', fontWeight: '800' }]}>
+                today is 
+              </Text>
+              <Text style={[styles.hiText, { 
+                textDecorationLine: 'underline', 
+                marginLeft: scale(6),
+                fontWeight: '900'
+              }]}>
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </Text>
+              <Icon name="calendar-today" size={responsiveFontSize(16)} color={colors.electricBlue} style={{ marginLeft: scale(6) }} />
+            </TouchableOpacity>
+          </View>
 
           {/* Task List */}
           <View style={styles.taskListContainer}>
@@ -1108,24 +1095,7 @@ const MainHomeScreen = () => {
                 showNavigation={true}
                 slideWidth={widthPercentage(100) - scale(30)} // Account for container padding (15 + 15)
                 renderItem={(goal, index) => {
-                  // Use light pastel colors instead of vibrant colors
-                  const pastelColors = [
-                    '#FFE4E1', // Light pink
-                    '#E0FFFF', // Light cyan
-                    '#F0FFF0', // Honeydew
-                    '#F5F5DC', // Beige
-                    '#E6E6FA', // Lavender
-                    '#FFFACD', // Lemon chiffon
-                    '#F0FFF0', // Light green
-                    '#F0F8FF', // Alice blue
-                    '#FFF5EE', // Seashell
-                    '#FDF5E6'  // Old lace
-                  ];
-
-                  const backgroundColor = pastelColors[index % pastelColors.length];
-
-                  const titleColor = getDarkerColor(backgroundColor);
-                  const weekDaysBackgroundColor = getDarkerColor(backgroundColor, 0.7); // Even darker for weekdays
+                  const { light: lightColor, dark: darkColor } = heatmapColors[goal.id] || { light: colors.electricBlueLight, dark: colors.electricBlueDark };
 
                   // Calculate streak for this specific goal
                   const calculateGoalStreak = () => {
@@ -1188,32 +1158,46 @@ const MainHomeScreen = () => {
 
                   return (
                     <View key={goal.id} style={styles.goalHeatmapContainer}>
-                      <View style={[styles.goalHeatmap, { backgroundColor }]}>
+                      <View style={[styles.goalHeatmap, { backgroundColor: lightColor }]}>
                         <View style={styles.goalHeader}>
-                          <Text style={[styles.goalName, { color: titleColor }]} numberOfLines={1}>
+                          <Text style={[styles.goalName, { color: darkColor }]} numberOfLines={1}>
                             {goal.text}
                           </Text>
                           <View style={styles.streakContainer}>
-                            <Icon name="local-fire-department" size={responsiveFontSize(14)} color={colors.textLight} />
+                            <Icon name="local-fire-department" size={responsiveFontSize(16)} color={colors.streakHighlight} />
                             <Text style={styles.streakText}>{streak} days</Text>
                           </View>
                         </View>
                         <View style={styles.progressContainer}>
-                          <Text style={styles.progressText}>{Math.round((completionPercentage / 100) * daysInMonth)} of {daysInMonth} days completed</Text>
+                          <Text style={[styles.progressText, { color: darkColor }]}>{Math.round((completionPercentage / 100) * daysInMonth)} of {daysInMonth} days completed</Text>
                           <View style={styles.progressBarContainer}>
-                            <View style={[styles.progressBar, { width: `${completionPercentage}%` }]} />
+                            <View style={[styles.progressBar, { 
+                              backgroundColor: darkColor,
+                              width: `${completionPercentage}%` 
+                            }]} />
                           </View>
                         </View>
                         <TouchableOpacity
-                          style={[styles.dailyCheckButton, { backgroundColor: titleColor }]}
+                          style={[styles.dailyCheckButton, { 
+                            backgroundColor: `${darkColor}33`, // Glass effect
+                            borderColor: darkColor,
+                            borderWidth: 1
+                          }]}
                           onPress={() => {
                             if (user) {
                               const today = new Date();
                               today.setHours(0, 0, 0, 0); // Normalize the time
+                              today.setMilliseconds(0); // Ensure milliseconds are zero
+                              
+                              // Mark today as completed for this goal directly
                               Alert.alert(
-                                'Daily Check-in',
+                                'Mark Completed',
                                 `Did you complete "${goal.text}" today?`,
                                 [
+                                  {
+                                    text: 'Cancel',
+                                    style: 'cancel'
+                                  },
                                   {
                                     text: 'No',
                                     onPress: async () => {
@@ -1234,6 +1218,7 @@ const MainHomeScreen = () => {
                                         });
                                       } catch (error) {
                                         console.error('Error marking goal as missed:', error);
+                                        Alert.alert('Error', 'Failed to mark goal as missed. Please try again.');
                                       }
                                     }
                                   },
@@ -1257,6 +1242,7 @@ const MainHomeScreen = () => {
                                         });
                                       } catch (error) {
                                         console.error('Error marking goal as completed:', error);
+                                        Alert.alert('Error', 'Failed to mark goal as completed. Please try again.');
                                       }
                                     }
                                   }
@@ -1265,59 +1251,125 @@ const MainHomeScreen = () => {
                             }
                           }}
                         >
-                          <Icon name="check-circle" size={responsiveFontSize(14)} color={colors.textLight} />
-                          <Text style={styles.dailyCheckButtonText}>Done Today?</Text>
+                          <Icon name="check-circle" size={responsiveFontSize(16)} color={darkColor} />
+                          <Text style={[styles.dailyCheckButtonText, { color: darkColor }]}>Done Today</Text>
                         </TouchableOpacity>
-                        <View style={[styles.heatmapCalendar, { backgroundColor: getDarkerColor(backgroundColor, 0.95) }]}>
+                        <View style={[styles.heatmapCalendar, { backgroundColor: `${lightColor}80` }]}>
                           {/* Days of week header */}
-                          <View style={[styles.heatmapWeekDays, { backgroundColor: weekDaysBackgroundColor }]}>
+                          <View style={[styles.heatmapWeekDays, { backgroundColor: darkColor }]}>
                             {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-                              <Text key={index} style={styles.heatmapWeekDayText}>
+                              <Text key={index} style={[styles.heatmapWeekDayText, { color: colors.textLight }]}>
                                 {day}
                               </Text>
                             ))}
                           </View>
                           <View style={styles.heatmapGrid}>
-                            {heatmapDaysRef.current.map((day, index) => {
-                              const dateStr = day.date.toISOString().split('T')[0];
-                              const goalProgress = goalsProgress[goal.id] || [];
-                              const progressRecord = goalProgress.find(p => p.date === dateStr);
+                            {(heatmapDaysRef.current && heatmapDaysRef.current.length > 0) ? (
+                              heatmapDaysRef.current.map((day, index) => {
+                                const dateStr = day.date.toISOString().split('T')[0];
+                                const goalProgress = goalsProgress[goal.id] || [];
+                                const progressRecord = goalProgress.find(p => p.date === dateStr);
 
-                              // Get the color style for this cell
-                              const colorStyle = getHeatmapDateColor(day.date, goal.id);
+                                // Determine cell color based on progress
+                                let cellBackgroundColor = `${lightColor}60`;
+                                let cellTextColor = colors.text;
 
-                              return (
-                                <TouchableOpacity
-                                  key={`${goal.id}-${dateStr}-${index}`}
-                                  style={[
-                                    styles.heatmapDateCell,
-                                    day.isCurrentMonth ? styles.currentMonthCell : styles.otherMonthCell,
-                                    isToday(day.date) && styles.todayDateCell,
-                                    colorStyle
-                                  ]}
-                                  onPress={() => {
-                                    // Handle cell press - would mark goal progress for this day
-                                    handleDatePress(day.date, goal.id);
-                                  }}
-                                  disabled={!day.isCurrentMonth}
-                                  activeOpacity={0.7}
-                                >
-                                  <Text style={[
-                                    styles.heatmapDateText,
-                                    day.isCurrentMonth ? styles.currentMonthDateText : styles.otherMonthDateText,
-                                    isToday(day.date) && styles.todayDateText
-                                  ]}>
-                                    {day.day}
-                                  </Text>
-                                </TouchableOpacity>
-                              );
-                            })}
+                                if (progressRecord) {
+                                  if (progressRecord.completed) {
+                                    // Completed day - use dark background color
+                                    cellBackgroundColor = darkColor;
+                                    cellTextColor = colors.textLight;
+                                  } else {
+                                    // Missed day - use error color
+                                    cellBackgroundColor = colors.error;
+                                    cellTextColor = colors.textLight;
+                                  }
+                                } else {
+                                  // Future or unmarked date
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  const checkDate = new Date(day.date);
+                                  checkDate.setHours(0, 0, 0, 0);
+                                  
+                                  if (checkDate > today) {
+                                    // Future date - lighter background
+                                    cellBackgroundColor = `${lightColor}40`;
+                                  } else {
+                                    // Past unmarked date - default light background
+                                    cellBackgroundColor = `${lightColor}60`;
+                                  }
+                                }
+
+                                // Special handling for today
+                                const isTodayDate = isToday(day.date);
+                                if (isTodayDate) {
+                                  cellBackgroundColor = darkColor;
+                                  cellTextColor = colors.textLight;
+                                }
+
+                                // Special handling for streak highlight (yellow)
+                                const isStreakDay = streak > 0 && (() => {
+                                  // Logic: if this date is within the streak period counting backwards from today
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  const checkDate = new Date(day.date);
+                                  checkDate.setHours(0, 0, 0, 0);
+                                  
+                                  // Only highlight dates that are on or before today
+                                  if (checkDate > today) {
+                                    return false;
+                                  }
+                                  
+                                  // Calculate the difference in days
+                                  const diffTime = today.getTime() - checkDate.getTime();
+                                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                  
+                                  // Highlight if within the streak period
+                                  return diffDays < streak;
+                                })();
+
+                                return (
+                                  <TouchableOpacity
+                                    key={`${goal.id}-${dateStr}-${index}`}
+                                    style={[
+                                      styles.heatmapDateCell,
+                                      day.isCurrentMonth ? styles.currentMonthCell : styles.otherMonthCell,
+                                      isTodayDate && styles.todayDateCell,
+                                      {
+                                        backgroundColor: isStreakDay ? colors.streakHighlight : cellBackgroundColor,
+                                        borderColor: isStreakDay ? colors.streakHighlight : darkColor,
+                                      }
+                                    ]}
+                                    onPress={() => {
+                                      // Handle cell press - would mark goal progress for this day
+                                      handleDatePress(day.date, goal.id);
+                                    }}
+                                    disabled={!day.isCurrentMonth}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Text style={[
+                                      styles.heatmapDateText,
+                                      day.isCurrentMonth ? styles.currentMonthDateText : styles.otherMonthDateText,
+                                      isTodayDate && styles.todayDateText,
+                                      { 
+                                        color: isStreakDay ? colors.text : cellTextColor 
+                                      }
+                                    ]}>
+                                      {day.day}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })
+                            ) : (
+                              // Fallback - generate heatmap days if not available
+                              <Text style={styles.noGoalsText}>Loading heatmap...</Text>
+                            )}
                           </View>
                         </View>
                         {/* Heatmap Legend */}
                         <View style={styles.heatmapLegend}>
                           <View style={styles.legendItem}>
-                            <View style={[styles.legendColorBox, styles.legendCompleted]} />
+                            <View style={[styles.legendColorBox, { backgroundColor: darkColor }]} />
                             <Text style={styles.legendText}>Completed</Text>
                           </View>
                           <View style={styles.legendItem}>
@@ -1357,7 +1409,7 @@ const MainHomeScreen = () => {
                   style={styles.closeButton}
                   onPress={() => setIsAddTaskModalVisible(false)}
                 >
-                  <Icon name="close" size={responsiveFontSize(24)} color="black" />
+                  <Icon name="close" size={responsiveFontSize(24)} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Add New Task</Text>
                 <TouchableOpacity
@@ -1396,8 +1448,7 @@ const MainHomeScreen = () => {
                   <TouchableOpacity
                     style={styles.dateDisplay}
                     onPress={() => {
-                      setTempSelectedDate(newTaskDate);
-                      setShowDatePicker(true);
+                      setShowAddTaskDatePicker(true);
                     }}
                   >
                     <View style={styles.selectedDateTimeContainer}>
@@ -1414,253 +1465,150 @@ const MainHomeScreen = () => {
                 </View>
 
                 {/* Display selected date and time below the picker */}
+              </View>
+            </View>
+          </View>
+        </Modal>
 
-
-                {/* Custom Date Picker Modal */}
-                <Modal
-                  visible={showDatePicker}
-                  transparent={true}
-                  animationType="fade"
-                  onRequestClose={() => setShowDatePicker(false)}
+        {/* Add Task Date Picker Modal */}
+        <Modal
+          visible={showAddTaskDatePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowAddTaskDatePicker(false)}
+        >
+          <View style={styles.pickerModalContainer}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>Select Date</Text>
+                <TouchableOpacity
+                  onPress={() => setShowAddTaskDatePicker(false)}
+                  style={styles.pickerCloseButton}
                 >
-                  <View style={styles.pickerModalContainer}>
-                    <View style={styles.pickerModalContent}>
-                      <View style={styles.pickerHeader}>
-                        <Text style={styles.pickerTitle}>Select Date</Text>
-                        <TouchableOpacity
-                          onPress={() => setShowDatePicker(false)}
-                          style={styles.pickerCloseButton}
-                        >
-                          <Icon name="close" size={responsiveFontSize(20)} color="black" />
-                        </TouchableOpacity>
-                      </View>
+                  <Icon name="close" size={responsiveFontSize(20)} color={colors.text} />
+                </TouchableOpacity>
+              </View>
 
-                      {/* Calendar View */}
-                      <View style={styles.calendarContainer}>
-                        <View style={styles.calendarHeader}>
-                          <TouchableOpacity onPress={() => {
-                            const newDate = new Date(tempSelectedDate);
-                            newDate.setMonth(newDate.getMonth() - 1);
-                            setTempSelectedDate(newDate);
-                          }}>
-                            <Icon name="chevron-left" size={responsiveFontSize(24)} color="black" />
-                          </TouchableOpacity>
-                          <Text style={styles.calendarMonthYear}>
-                            {tempSelectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                          </Text>
-                          <TouchableOpacity onPress={() => {
-                            const newDate = new Date(tempSelectedDate);
-                            newDate.setMonth(newDate.getMonth() + 1);
-                            setTempSelectedDate(newDate);
-                          }}>
-                            <Icon name="chevron-right" size={responsiveFontSize(24)} color="black" />
-                          </TouchableOpacity>
-                        </View>
+              {/* Calendar View */}
+              <View style={styles.calendarContainer}>
+                <View style={styles.calendarHeader}>
+                  <TouchableOpacity onPress={() => {
+                    const newDate = new Date(newTaskDate);
+                    newDate.setMonth(newDate.getMonth() - 1);
+                    setNewTaskDate(newDate);
+                  }}>
+                    <Icon name="chevron-left" size={responsiveFontSize(24)} color={colors.text} />
+                  </TouchableOpacity>
+                  <Text style={styles.calendarMonthYear}>
+                    {newTaskDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </Text>
+                  <TouchableOpacity onPress={() => {
+                    const newDate = new Date(newTaskDate);
+                    newDate.setMonth(newDate.getMonth() + 1);
+                    setNewTaskDate(newDate);
+                  }}>
+                    <Icon name="chevron-right" size={responsiveFontSize(24)} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
 
-                        <View style={styles.calendarDaysHeader}>
-                          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-                            <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
-                          ))}
-                        </View>
+                <View style={styles.calendarDaysHeader}>
+                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
+                    <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
+                  ))}
+                </View>
 
-                        <View style={styles.calendarGrid}>
-                          {getCalendarDays(tempSelectedDate).map((day, index) => (
-                            <TouchableOpacity
-                              key={index}
-                              style={[
-                                styles.calendarDay,
-                                day.isCurrentMonth ? styles.currentMonthDay : styles.otherMonthDay,
-                                day.date && day.date.toDateString() === tempSelectedDate.toDateString() ? styles.selectedDay : null
-                              ]}
-                              onPress={() => {
-                                if (day.date) {
-                                  setTempSelectedDate(day.date);
-                                }
-                              }}
-                              disabled={!day.isCurrentMonth}
-                            >
-                              <Text style={[
-                                styles.calendarDayText,
-                                day.isCurrentMonth ? styles.currentMonthDayText : styles.otherMonthDayText,
-                                day.date && day.date.toDateString() === tempSelectedDate.toDateString() ? styles.selectedDayText : null
-                              ]}>
-                                {day.day}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
+                <View style={styles.calendarGrid}>
+                  {getCalendarDays(newTaskDate).map((day, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.calendarDay,
+                        day.isCurrentMonth ? styles.currentMonthDay : styles.otherMonthDay,
+                        day.date && day.date.toDateString() === newTaskDate.toDateString() ? styles.selectedDay : null
+                      ]}
+                      onPress={() => {
+                        if (day.date) {
+                          setNewTaskDate(day.date);
+                        }
+                      }}
+                    >
+                      <Text style={[
+                        styles.calendarDayText,
+                        day.isCurrentMonth ? styles.currentMonthDayText : styles.otherMonthDayText,
+                        day.date && day.date.toDateString() === newTaskDate.toDateString() ? styles.selectedDayText : null
+                      ]}>
+                        {day.day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
 
-                      <View style={styles.pickerActions}>
-                        <TouchableOpacity
-                          style={styles.pickerCancelButton}
-                          onPress={() => setShowDatePicker(false)}
-                        >
-                          <Text style={styles.pickerCancelText}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.pickerConfirmButton}
-                          onPress={() => {
-                            // After selecting date, switch to time picker
-                            setShowDatePicker(false);
-                            setShowTimePicker(true);
-                          }}
-                        >
-                          <Text style={styles.pickerConfirmText}>Next</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
-                </Modal>
-
-                {/* Custom Time Picker Modal */}
-                <Modal
-                  visible={showTimePicker}
-                  transparent={true}
-                  animationType="fade"
-                  onRequestClose={() => setShowTimePicker(false)}
+              <View style={styles.pickerActions}>
+                <TouchableOpacity
+                  style={styles.pickerCancelButton}
+                  onPress={() => setShowAddTaskDatePicker(false)}
                 >
-                  <View style={styles.pickerModalContainer}>
-                    <View style={styles.pickerModalContent}>
-                      <View style={styles.pickerHeader}>
-                        <Text style={styles.pickerTitle}>Select Time</Text>
-                        <TouchableOpacity
-                          onPress={() => setShowTimePicker(false)}
-                          style={styles.pickerCloseButton}
-                        >
-                          <Icon name="close" size={responsiveFontSize(20)} color="black" />
-                        </TouchableOpacity>
-                      </View>
+                  <Text style={styles.pickerCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.pickerConfirmButton}
+                  onPress={() => {
+                    // After selecting date, switch to time picker
+                    setShowAddTaskDatePicker(false);
+                    setShowAddTaskTimePicker(true);
+                  }}
+                >
+                  <Text style={styles.pickerConfirmText}>Next</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
-                      {/* Time Picker */}
-                      <View style={styles.timePickerContainer}>
-                        <View style={styles.timePickerRow}>
-                          <TouchableOpacity
-                            style={styles.timePickerButton}
-                            onPress={() => {
-                              const newDate = new Date(tempSelectedDate);
-                              let hours = newDate.getHours();
-                              hours = (hours - 1 + 24) % 24;
-                              newDate.setHours(hours);
-                              setTempSelectedDate(newDate);
-                            }}
-                          >
-                            <Icon name="expand-less" size={responsiveFontSize(24)} color="black" />
-                          </TouchableOpacity>
-                          <Text style={styles.timePickerValue}>
-                            {tempSelectedDate.getHours() % 12 === 0 ? 12 : tempSelectedDate.getHours() % 12}
-                          </Text>
-                          <TouchableOpacity
-                            style={styles.timePickerButton}
-                            onPress={() => {
-                              const newDate = new Date(tempSelectedDate);
-                              let hours = newDate.getHours();
-                              hours = (hours + 1) % 24;
-                              newDate.setHours(hours);
-                              setTempSelectedDate(newDate);
-                            }}
-                          >
-                            <Icon name="expand-more" size={responsiveFontSize(24)} color="black" />
-                          </TouchableOpacity>
-                        </View>
+        {/* Add Task Time Picker Modal */}
+        <Modal
+          visible={showAddTaskTimePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowAddTaskTimePicker(false)}
+        >
+          <View style={styles.pickerModalContainer}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>Select Time</Text>
+                <TouchableOpacity
+                  onPress={() => setShowAddTaskTimePicker(false)}
+                  style={styles.pickerCloseButton}
+                >
+                  <Icon name="close" size={responsiveFontSize(20)} color={colors.text} />
+                </TouchableOpacity>
+              </View>
 
-                        <Text style={styles.timePickerColon}>:</Text>
+              <View style={styles.datePickerContainer}>
+                <DatePicker
+                  date={newTaskDate}
+                  onDateChange={setNewTaskDate}
+                  mode="time"
+                  style={styles.datePicker}
+                />
+              </View>
 
-                        <View style={styles.timePickerRow}>
-                          <TouchableOpacity
-                            style={styles.timePickerButton}
-                            onPress={() => {
-                              const newDate = new Date(tempSelectedDate);
-                              let minutes = newDate.getMinutes();
-                              minutes = (minutes - 1 + 60) % 60;
-                              newDate.setMinutes(minutes);
-                              setTempSelectedDate(newDate);
-                            }}
-                          >
-                            <Icon name="expand-less" size={responsiveFontSize(24)} color="black" />
-                          </TouchableOpacity>
-                          <Text style={styles.timePickerValue}>
-                            {tempSelectedDate.getMinutes().toString().padStart(2, '0')}
-                          </Text>
-                          <TouchableOpacity
-                            style={styles.timePickerButton}
-                            onPress={() => {
-                              const newDate = new Date(tempSelectedDate);
-                              let minutes = newDate.getMinutes();
-                              minutes = (minutes + 1) % 60;
-                              newDate.setMinutes(minutes);
-                              setTempSelectedDate(newDate);
-                            }}
-                          >
-                            <Icon name="expand-more" size={responsiveFontSize(24)} color="black" />
-                          </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.timePickerAmPmContainer}>
-                          <TouchableOpacity
-                            style={[
-                              styles.timePickerAmPmButton,
-                              tempSelectedDate.getHours() < 12 ? styles.selectedAmPmButton : null
-                            ]}
-                            onPress={() => {
-                              const newDate = new Date(tempSelectedDate);
-                              if (newDate.getHours() >= 12) {
-                                newDate.setHours(newDate.getHours() - 12);
-                                setTempSelectedDate(newDate);
-                              }
-                            }}
-                          >
-                            <Text style={[
-                              styles.timePickerAmPmText,
-                              tempSelectedDate.getHours() < 12 ? styles.selectedAmPmText : null
-                            ]}>
-                              AM
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.timePickerAmPmButton,
-                              tempSelectedDate.getHours() >= 12 ? styles.selectedAmPmButton : null
-                            ]}
-                            onPress={() => {
-                              const newDate = new Date(tempSelectedDate);
-                              if (newDate.getHours() < 12) {
-                                newDate.setHours(newDate.getHours() + 12);
-                                setTempSelectedDate(newDate);
-                              }
-                            }}
-                          >
-                            <Text style={[
-                              styles.timePickerAmPmText,
-                              tempSelectedDate.getHours() >= 12 ? styles.selectedAmPmText : null
-                            ]}>
-                              PM
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      <View style={styles.pickerActions}>
-                        <TouchableOpacity
-                          style={styles.pickerCancelButton}
-                          onPress={() => setShowTimePicker(false)}
-                        >
-                          <Text style={styles.pickerCancelText}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.pickerConfirmButton}
-                          onPress={() => {
-                            // Update the newTaskDate with the selected date and time
-                            setNewTaskDate(tempSelectedDate);
-                            setShowTimePicker(false);
-                          }}
-                        >
-                          <Text style={styles.pickerConfirmText}>Done</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
-                </Modal>
+              <View style={styles.pickerActions}>
+                <TouchableOpacity
+                  style={styles.pickerCancelButton}
+                  onPress={() => setShowAddTaskTimePicker(false)}
+                >
+                  <Text style={styles.pickerCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.pickerConfirmButton}
+                  onPress={() => {
+                    setShowAddTaskTimePicker(false);
+                  }}
+                >
+                  <Text style={styles.pickerConfirmText}>Done</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -1669,60 +1617,222 @@ const MainHomeScreen = () => {
         {/* Task Detail Modal */}
         <Modal
           visible={!!selectedTask}
-          animationType="slide"
-          presentationStyle="pageSheet"
+          animationType="fade"
+          transparent={true}
           onRequestClose={() => setSelectedTask(null)}
         >
-          <SafeAreaView style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setSelectedTask(null)}
-              >
-                <Icon name="close" size={responsiveFontSize(24)} color={colors.text} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={deleteSelectedTask}
-              >
-                <Icon name="delete" size={responsiveFontSize(24)} color={colors.error} />
-              </TouchableOpacity>
-            </View>
-
-            {selectedTask && (
-              <View style={styles.modalContent}>
-                <TextInput
-                  style={styles.editTitleInput}
-                  value={editTaskTitle}
-                  onChangeText={setEditTaskTitle}
-                  placeholder="Task title"
-                  multiline
-                />
-
-                <TextInput
-                  style={styles.editDescriptionInput}
-                  value={editTaskDescription}
-                  onChangeText={setEditTaskDescription}
-                  placeholder="Task description"
-                  multiline
-                  textAlignVertical="top"
-                />
-
-                <View style={styles.datePickerContainer}>
-                  <Text style={styles.datePickerLabel}>Due Date:</Text>
-                  <Text style={styles.dateDisplay}>
-                    {selectedTask.dueDate ? selectedTask.dueDate.toDate().toDateString() : 'No date set'}
-                  </Text>
-                </View>
-
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Task</Text>
                 <TouchableOpacity
-                  style={styles.saveButton}
-                  onPress={saveTaskEdits}
+                  style={styles.closeButton}
+                  onPress={() => setSelectedTask(null)}
                 >
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                  <Icon name="close" size={responsiveFontSize(24)} color="#000000" />
                 </TouchableOpacity>
               </View>
-            )}
-          </SafeAreaView>
+
+              {selectedTask && (
+                <View style={styles.modalContent}>
+                  <TextInput
+                    style={styles.editTitleInput}
+                    value={editTaskTitle}
+                    onChangeText={setEditTaskTitle}
+                    placeholder="Task title"
+                    multiline
+                  />
+
+                  <TextInput
+                    style={styles.editDescriptionInput}
+                    value={editTaskDescription}
+                    onChangeText={setEditTaskDescription}
+                    placeholder="Task description"
+                    multiline
+                    textAlignVertical="top"
+                  />
+
+                  <TouchableOpacity 
+                    style={styles.dateDisplay}
+                    onPress={() => {
+                      setTempSelectedDate(selectedTask.dueDate?.toDate() || new Date());
+                      setShowTaskDetailDatePicker(true);
+                    }}
+                  >
+                    <View style={styles.taskDetailDateContent}>
+                      <Icon name="event" size={responsiveFontSize(18)} color={colors.electricBlue} />
+                      <Text style={styles.dateDisplayText}>
+                        {selectedTask.dueDate ? selectedTask.dueDate.toDate().toLocaleDateString() : 'Set date'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.dateDisplay}
+                    onPress={() => {
+                      setTempSelectedDate(selectedTask.dueDate?.toDate() || new Date());
+                      setShowTaskDetailTimePicker(true);
+                    }}
+                  >
+                    <View style={styles.taskDetailTimeContent}>
+                      <Icon name="schedule" size={responsiveFontSize(18)} color={colors.electricBlue} />
+                      <Text style={styles.dateDisplayText}>
+                        {selectedTask.dueDate ? selectedTask.dueDate.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Set time'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={saveTaskEdits}
+                  >
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Task Detail Date Picker Modal */}
+        <Modal
+          visible={showTaskDetailDatePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowTaskDetailDatePicker(false)}
+        >
+          <View style={styles.pickerModalContainer}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>Select Date</Text>
+                <TouchableOpacity
+                  onPress={() => setShowTaskDetailDatePicker(false)}
+                  style={styles.pickerCloseButton}
+                >
+                  <Icon name="close" size={responsiveFontSize(20)} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.calendarContainer}>
+                <View style={styles.calendarHeader}>
+                  <TouchableOpacity onPress={() => {
+                    const newDate = new Date(tempSelectedDate);
+                    newDate.setMonth(newDate.getMonth() - 1);
+                    setTempSelectedDate(newDate);
+                  }}>
+                    <Icon name="chevron-left" size={responsiveFontSize(24)} color={colors.text} />
+                  </TouchableOpacity>
+                  <Text style={styles.calendarMonthYear}>
+                    {tempSelectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </Text>
+                  <TouchableOpacity onPress={() => {
+                    const newDate = new Date(tempSelectedDate);
+                    newDate.setMonth(newDate.getMonth() + 1);
+                    setTempSelectedDate(newDate);
+                  }}>
+                    <Icon name="chevron-right" size={responsiveFontSize(24)} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.calendarDaysHeader}>
+                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
+                    <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
+                  ))}
+                </View>
+
+                <View style={styles.calendarGrid}>
+                  {getCalendarDays(tempSelectedDate).map((day, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.calendarDay,
+                        day.isCurrentMonth ? styles.currentMonthDay : styles.otherMonthDay,
+                        day.date && day.date.toDateString() === tempSelectedDate.toDateString() ? styles.selectedDay : null
+                      ]}
+                      onPress={() => {
+                        if (day.date) {
+                          setTempSelectedDate(day.date);
+                        }
+                      }}
+                    >
+                      <Text style={[
+                        styles.calendarDayText,
+                        day.isCurrentMonth ? styles.currentMonthDayText : styles.otherMonthDayText,
+                        day.date && day.date.toDateString() === tempSelectedDate.toDateString() ? styles.selectedDayText : null
+                      ]}>
+                        {day.day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.pickerActions}>
+                <TouchableOpacity
+                  style={styles.pickerCancelButton}
+                  onPress={() => setShowTaskDetailDatePicker(false)}
+                >
+                  <Text style={styles.pickerCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.pickerConfirmButton}
+                  onPress={() => {
+                    setShowTaskDetailDatePicker(false);
+                  }}
+                >
+                  <Text style={styles.pickerConfirmText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Task Detail Time Picker Modal */}
+        <Modal
+          visible={showTaskDetailTimePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowTaskDetailTimePicker(false)}
+        >
+          <View style={styles.pickerModalContainer}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>Select Time</Text>
+                <TouchableOpacity
+                  onPress={() => setShowTaskDetailTimePicker(false)}
+                  style={styles.pickerCloseButton}
+                >
+                  <Icon name="close" size={responsiveFontSize(20)} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.datePickerContainer}>
+                <DatePicker
+                  date={tempSelectedDate}
+                  onDateChange={setTempSelectedDate}
+                  mode="time"
+                  style={styles.datePicker}
+                />
+              </View>
+
+              <View style={styles.pickerActions}>
+                <TouchableOpacity
+                  style={styles.pickerCancelButton}
+                  onPress={() => setShowTaskDetailTimePicker(false)}
+                >
+                  <Text style={styles.pickerCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.pickerConfirmButton}
+                  onPress={() => {
+                    setShowTaskDetailTimePicker(false);
+                  }}
+                >
+                  <Text style={styles.pickerConfirmText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
         </Modal>
       </View>
     </View>
@@ -1735,14 +1845,14 @@ const styles = StyleSheet.create({
   },
   scrollContentContainer: {
     paddingTop: verticalScale(60),
-    minHeight: scale(1000), // Add padding to account for absolute positioned header (HEADER_HEIGHT)
+    minHeight: scale(1000),
   },
   taskListContainer: {
     paddingHorizontal: scale(16),
   },
   headerBar: {
     backgroundColor: colors.surface,
-    paddingVertical: verticalScale(10),
+    paddingVertical: verticalScale(12),
     // Make it absolutely positioned to float above content
     position: 'absolute',
     top: 0,
@@ -1760,9 +1870,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
   },
   headerAddButton: {
-    padding: scale(8),
-    backgroundColor: colors.secondary,
-    borderRadius: moderateScale(10),
+    padding: scale(10),
+    backgroundColor: colors.electricBlue,
+    borderRadius: moderateScale(12),
+    // Flat surface with no shadow
   },
   headerLogo: {
     width: verticalScale(30),
@@ -1792,191 +1903,149 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
+  heatmapNavigation: {
+    flexDirection: 'row',
+  },
+  heatmapNavButton: {
+    marginHorizontal: scale(4),
+  },
+  heatmapNavButtonCircle: {
+    width: scale(32),
+    height: scale(32),
+    borderRadius: scale(16),
+    backgroundColor: colors.electricBlue,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heatmapNavButtonText: {
+    color: colors.textLight,
+    fontSize: responsiveFontSize(20),
+    fontWeight: '700',
+  },
   dailyCheckButton: {
-    backgroundColor: colors.secondary,
-    paddingHorizontal: scale(20),
-    paddingVertical: verticalScale(10),
-    borderRadius: moderateScale(25),
+    paddingHorizontal: scale(24),
+    paddingVertical: verticalScale(12),
+    borderRadius: moderateScale(30),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 5,
     alignSelf: 'center',
-    marginTop: verticalScale(10),
-    marginBottom: verticalScale(15),
+    marginTop: verticalScale(12),
+    marginBottom: verticalScale(18),
+    borderWidth: 1,
   },
   dailyCheckButtonText: {
-    color: colors.textLight,
-    fontSize: responsiveFontSize(14),
-    fontWeight: '700',
-    marginLeft: scale(6),
+    fontSize: responsiveFontSize(15),
+    fontWeight: '800',
+    marginLeft: scale(8),
   },
   goalHeatmapContainer: {
     width: '100%',
-    marginBottom: verticalScale(12),
+    marginBottom: verticalScale(16),
   },
   goalHeatmap: {
-    borderRadius: moderateScale(16),
-    paddingVertical: scale(12),
-    paddingHorizontal: scale(12),
+    borderRadius: moderateScale(20),
+    paddingVertical: scale(16),
+    paddingHorizontal: scale(16),
     height: '100%',
-    backgroundColor: colors.surface,
+    // Flat surface with no shadow
   },
   goalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(12),
+    marginBottom: verticalScale(16),
   },
   goalName: {
-    fontSize: responsiveFontSize(18),
-    fontWeight: '700',
-    color: colors.text,
-    maxWidth: '65%',
-    lineHeight: responsiveFontSize(22),
+    fontSize: responsiveFontSize(19),
+    fontWeight: '800',
+    maxWidth: '70%',
+    lineHeight: responsiveFontSize(24),
   },
   streakContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.secondary,
-    borderRadius: moderateScale(16),
-    paddingHorizontal: scale(10),
-    paddingVertical: verticalScale(4),
+    borderRadius: moderateScale(20),
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(6),
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   streakText: {
-    color: colors.textLight,
-    fontSize: responsiveFontSize(12),
-    fontWeight: '700',
-    marginLeft: scale(4),
+    color: colors.text,
+    fontSize: responsiveFontSize(13),
+    fontWeight: '800',
+    marginLeft: scale(6),
   },
   progressContainer: {
-    marginBottom: verticalScale(12),
+    marginBottom: verticalScale(16),
   },
   progressBarContainer: {
-    height: verticalScale(6),
-    backgroundColor: colors.gray200,
-    borderRadius: moderateScale(3),
-    marginVertical: verticalScale(4),
+    height: verticalScale(8),
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: moderateScale(4),
+    marginVertical: verticalScale(6),
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: moderateScale(3),
+    borderRadius: moderateScale(4),
   },
   progressText: {
-    fontSize: responsiveFontSize(12),
-    color: colors.textSecondary,
+    fontSize: responsiveFontSize(13),
     textAlign: 'right',
-    marginBottom: verticalScale(2),
+    marginBottom: verticalScale(4),
+    fontWeight: '600',
   },
   heatmapCalendar: {
-    borderRadius: moderateScale(12),
-    backgroundColor: colors.gray50,
-    padding: scale(10),
+    borderRadius: moderateScale(16),
+    padding: scale(12),
     height: 200,
   },
   heatmapWeekDays: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: scale(2),
-    backgroundColor: colors.primary,
-    borderRadius: moderateScale(6),
-    paddingVertical: verticalScale(4),
+    paddingHorizontal: scale(4),
+    borderRadius: moderateScale(8),
+    paddingVertical: verticalScale(6),
   },
   heatmapWeekDayText: {
-    fontSize: responsiveFontSize(10),
+    fontSize: responsiveFontSize(11),
     fontWeight: '700',
-    color: colors.textLight,
-    width: '14.28%',
+    width: '14%',
     textAlign: 'center',
   },
   heatmapGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: verticalScale(6),
+    marginTop: verticalScale(8),
   },
   heatmapDateCell: {
-    width: '12%', // Reduced width to prevent overflow
+    width: '14%',
     aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: scale(1),
-    borderRadius: moderateScale(6),
-    backgroundColor: colors.surface,
+    marginVertical: scale(2),
+    borderRadius: moderateScale(8),
     borderWidth: 1,
-    borderColor: colors.gray200,
+    // Flat surface with no shadow
   },
-  currentMonthCell: {
-    // No additional styling needed
-  },
+  currentMonthCell: {},
   otherMonthCell: {
-    opacity: 0.3,
+    opacity: 0.4,
   },
   heatmapDateText: {
-    fontSize: responsiveFontSize(11),
-    fontWeight: '600',
-    color: colors.text,
-  },
-  currentMonthDateText: {
-    // No additional styling needed
-  },
-  otherMonthDateText: {
-    color: colors.textSecondary,
-  },
-  heatmapDateDefault: {
-    backgroundColor: colors.gray100,
-    borderColor: colors.gray300,
-  },
-  heatmapDateFuture: {
-    backgroundColor: colors.gray50,
-    borderColor: colors.gray200,
-  },
-  heatmapDateCompleted: {
-    backgroundColor: colors.success,
-    borderColor: colors.successDark,
-    // Add subtle shadow for depth
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  heatmapDateMissed: {
-    backgroundColor: colors.error,
-    borderColor: colors.errorDark,
-    // Add subtle shadow for depth
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  todayDateCell: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primaryDark,
-    // Add glow effect for today
-    shadowColor: colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  todayDateText: {
-    color: colors.textLight,
+    fontSize: responsiveFontSize(10),
     fontWeight: '700',
   },
-  // Removed tick mark styles
+  currentMonthDateText: {},
+  otherMonthDateText: {},
+  todayDateCell: {
+    // Flat surface with no shadow
+  },
+  todayDateText: {
+    fontWeight: '800',
+  },
   noGoalsContainer: {
     alignItems: 'center',
     paddingVertical: verticalScale(30),
@@ -1991,50 +2060,46 @@ const styles = StyleSheet.create({
   heatmapLegend: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingHorizontal: scale(12),
-    marginTop: verticalScale(16),
-    backgroundColor: colors.gray50,
-    borderRadius: moderateScale(10),
-    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(16),
+    marginTop: verticalScale(20),
+    borderRadius: moderateScale(12),
+    paddingVertical: verticalScale(12),
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   legendColorBox: {
-    width: scale(14),
-    height: scale(14),
-    borderRadius: moderateScale(3),
-    marginRight: scale(6),
-  },
-  legendCompleted: {
-    backgroundColor: colors.success,
+    width: scale(16),
+    height: scale(16),
+    borderRadius: moderateScale(4),
+    marginRight: scale(8),
   },
   legendMissed: {
     backgroundColor: colors.error,
   },
   legendDefault: {
-    backgroundColor: colors.gray200,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   legendText: {
-    fontSize: responsiveFontSize(12),
+    fontSize: responsiveFontSize(13),
     color: colors.text,
     fontWeight: '600',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Glass background
-    borderRadius: moderateScale(100),
-    marginHorizontal: scale(15),
-    marginVertical: verticalScale(0),
-    paddingHorizontal: scale(15),
-    paddingVertical: verticalScale(5),
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: moderateScale(30),
+    marginHorizontal: scale(16),
+    marginVertical: verticalScale(4),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(8),
     borderWidth: 1,
-    borderColor: 'black',
-    // Glass effect
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   searchIcon: {
     marginRight: scale(12),
@@ -2072,35 +2137,25 @@ const styles = StyleSheet.create({
   weekSelectorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: scale(16),
-    marginBottom: verticalScale(16),
-    marginTop: verticalScale(8),
+    paddingHorizontal: 0,
+    marginTop: verticalScale(12),
     width: '100%',
-  },
-  weekNavButton: {
-    width: verticalScale(36),
-    height: verticalScale(36),
-    borderRadius: moderateScale(18),
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   daysScrollViewContainer: {
     flex: 1,
-    marginHorizontal: scale(8),
+    marginHorizontal: 0,
     position: 'relative',
-    marginTop: verticalScale(-8),
+    marginTop: verticalScale(-10),
   },
   weekDaysContainer: {
     flex: 1,
+    marginBottom: verticalScale(12),
   },
   weekDaysContentContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: scale(15), // Increased padding to prevent cropping
-    paddingVertical: verticalScale(5),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(6),
   },
   leftFade: {
     position: 'absolute',
@@ -2123,49 +2178,73 @@ const styles = StyleSheet.create({
     pointerEvents: 'none',
   },
 
-
   dayContainer: {
     alignItems: 'center',
-    marginHorizontal: scale(3),
-    marginVertical: verticalScale(2),
+    marginHorizontal: scale(4),
+    marginVertical: verticalScale(4),
   },
   monthIndicator: {
-    fontSize: responsiveFontSize(10),
-    fontWeight: '600',
+    fontSize: responsiveFontSize(11),
+    fontWeight: '700',
     color: colors.textSecondary,
-    marginBottom: verticalScale(2),
+    marginBottom: verticalScale(4),
   },
   dayCircle: {
-    width: verticalScale(36),
-    height: verticalScale(36),
-    borderRadius: moderateScale(18),
-    backgroundColor: colors.gray100,
+    width: verticalScale(44),
+    height: verticalScale(54),
+    borderRadius: moderateScale(22),
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.gray300,
+    borderColor: colors.border,
+    paddingVertical: verticalScale(6),
+  },
+  dayInnerCircle: {
+    width: verticalScale(32),
+    height: verticalScale(32),
+    borderRadius: moderateScale(16),
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  selectedDayInnerCircle: {
+    backgroundColor: colors.surface,
+    borderColor: colors.surface,
+  },
+  todayDayInnerCircle: {
+    backgroundColor: colors.surface,
+    borderColor: colors.surface,
   },
   selectedDayCircle: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.electricBlue,
+    borderColor: colors.electricBlue,
   },
   todayDayCircle: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
+    backgroundColor: colors.hotPink,
+    borderColor: colors.hotPink,
   },
   dayName: {
-    fontSize: responsiveFontSize(9),
-    fontWeight: '600',
+    fontSize: responsiveFontSize(10),
+    fontWeight: '700',
     color: colors.textSecondary,
   },
   dayNumber: {
-    fontSize: responsiveFontSize(11),
-    fontWeight: '700',
+    fontSize: responsiveFontSize(12),
+    fontWeight: '800',
+    color: colors.text,
+  },
+  selectedDayNumber: {
+    color: colors.text,
+  },
+  todayDayNumber: {
     color: colors.text,
   },
   selectedDayText: {
     color: colors.textLight,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   todayDayText: {
     color: colors.textLight,
@@ -2178,16 +2257,14 @@ const styles = StyleSheet.create({
   },
   taskItem: {
     backgroundColor: colors.surface,
-    borderRadius: moderateScale(12),
-    padding: moderateScale(12),
-    marginBottom: verticalScale(8),
+    borderRadius: moderateScale(16),
+    padding: moderateScale(16),
+    marginBottom: verticalScale(12),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: colors.border,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
   },
   taskTextContainer: {
     flex: 1,
@@ -2218,7 +2295,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(16),
   },
   hiText: {
-    color: colors.secondary,
+    color: colors.text,
     fontSize: responsiveFontSize(12),
     fontWeight: '900',
   },
@@ -2226,7 +2303,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: verticalScale(120), // Position it below the date scroller
     zIndex: 2000,
-    elevation: 20,
   },
   runnerEmoji: {
     fontSize: responsiveFontSize(40),
@@ -2248,12 +2324,149 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  // Date/Time Picker Styles
+  pickerModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerModalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: moderateScale(16),
+    width: '90%',
+    maxHeight: '85%',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: scale(16),
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pickerTitle: {
+    fontSize: responsiveFontSize(18),
+    fontWeight: '600',
+    color: colors.text,
+  },
+  pickerCloseButton: {
+    padding: scale(4),
+  },
+  calendarContainer: {
+    padding: scale(16),
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: verticalScale(16),
+  },
+  calendarMonthYear: {
+    fontSize: responsiveFontSize(16),
+    fontWeight: '600',
+    color: colors.text,
+  },
+  calendarDaysHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: verticalScale(8),
+  },
+  calendarDayHeader: {
+    width: '14%',
+    textAlign: 'center',
+    fontSize: responsiveFontSize(12),
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  calendarDay: {
+    width: '14%',
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: scale(2),
+    borderRadius: moderateScale(8),
+  },
+  currentMonthDay: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  otherMonthDay: {
+    opacity: 0.4,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  selectedDay: {
+    backgroundColor: colors.electricBlue,
+    borderColor: colors.electricBlue,
+  },
+  calendarDayText: {
+    fontSize: responsiveFontSize(14),
+    fontWeight: '600',
+  },
+  currentMonthDayText: {
+    color: colors.text,
+  },
+  otherMonthDayText: {
+    color: colors.textSecondary,
+  },
+  datePickerContainer: {
+    alignItems: 'center',
+    marginVertical: verticalScale(16),
+  },
+  datePicker: {
+    width: '100%',
+    height: verticalScale(150),
+  },
+  pickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: scale(16),
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  pickerCancelButton: {
+    flex: 1,
+    padding: moderateScale(12),
+    alignItems: 'center',
+    marginRight: scale(8),
+    borderRadius: moderateScale(8),
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pickerConfirmButton: {
+    flex: 1,
+    padding: moderateScale(12),
+    alignItems: 'center',
+    marginLeft: scale(8),
+    borderRadius: moderateScale(8),
+    backgroundColor: colors.electricBlue,
+  },
+  pickerCancelText: {
+    fontSize: responsiveFontSize(16),
+    fontWeight: '600',
+    color: colors.text,
+  },
+  pickerConfirmText: {
+    fontSize: responsiveFontSize(16),
+    fontWeight: '600',
+    color: colors.textLight,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: scale(16),
-    paddingVertical: verticalScale(14),
+    padding: scale(16),
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -2262,11 +2475,76 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  closeButton: {
-    padding: scale(8),
+  modalContent: {
+    padding: scale(16),
+  },
+  editTitleInput: {
+    fontSize: responsiveFontSize(18),
+    fontWeight: '600',
+    color: colors.text,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: verticalScale(12),
+    marginBottom: verticalScale(16),
+    minHeight: verticalScale(40),
+  },
+  editDescriptionInput: {
+    fontSize: responsiveFontSize(15),
+    color: colors.text,
+    textAlignVertical: 'top',
+    paddingVertical: verticalScale(12),
+    minHeight: verticalScale(80),
+    maxHeight: verticalScale(120),
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginBottom: verticalScale(16),
+  },
+  dateDisplay: {
+    backgroundColor: colors.surface,
+    borderRadius: moderateScale(12),
+    padding: scale(12),
+    marginBottom: verticalScale(16),
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dateDisplayText: {
+    fontSize: responsiveFontSize(16),
+    color: colors.text,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  selectedDateTimeContainer: {
+    marginBottom: verticalScale(8),
+  },
+  selectedDateTimeText: {
+    fontSize: responsiveFontSize(14),
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  saveButton: {
+    backgroundColor: colors.electricBlue,
+    borderRadius: moderateScale(12),
+    padding: moderateScale(16),
+    alignItems: 'center',
+    marginTop: verticalScale(8),
+  },
+  taskDetailDateContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskDetailTimeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonText: {
+    color: colors.textLight,
+    fontSize: responsiveFontSize(16),
+    fontWeight: '600',
   },
   saveButtonSmall: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.electricBlue,
     borderRadius: moderateScale(8),
     paddingHorizontal: scale(16),
     paddingVertical: verticalScale(8),
@@ -2276,336 +2554,8 @@ const styles = StyleSheet.create({
     fontSize: responsiveFontSize(14),
     fontWeight: '600',
   },
-  modalContent: {
-    padding: scale(16),
-  },
-  editTitleInput: {
-    fontSize: responsiveFontSize(17),
-    fontWeight: '600',
-    color: colors.text,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: verticalScale(10),
-    marginBottom: verticalScale(14),
-    minHeight: verticalScale(40),
-  },
-  editDescriptionInput: {
-    fontSize: responsiveFontSize(14),
-    color: colors.text,
-    textAlignVertical: 'top',
-    paddingVertical: verticalScale(10),
-    minHeight: verticalScale(70),
-    maxHeight: verticalScale(100),
-    backgroundColor: colors.gray50,
-    borderRadius: moderateScale(8),
-    paddingHorizontal: scale(10),
-    marginBottom: verticalScale(12),
-  },
-  datePickerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: verticalScale(12),
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  datePickerLabel: {
-    fontSize: responsiveFontSize(15),
-    fontWeight: '600',
-    color: colors.text,
-    marginRight: scale(8),
-  },
-  dateDisplay: {
-    flex: 1,
-    paddingVertical: verticalScale(8),
-  },
-  dateDisplayText: {
-    fontSize: responsiveFontSize(15),
-    color: colors.textSecondary,
-    flex: 1,
-  },
-  calendarIcon: {
-    marginLeft: scale(8),
-  },
-  selectedDateTimeContainer: {
-    marginTop: verticalScale(8),
-    padding: scale(8),
-    backgroundColor: colors.gray50,
-    borderRadius: moderateScale(6),
-  },
-  selectedDateTimeText: {
-    fontSize: responsiveFontSize(13),
-    color: colors.text,
-    textAlign: 'center',
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: moderateScale(12),
-    padding: moderateScale(14),
-    alignItems: 'center',
-    marginTop: verticalScale(8),
-  },
-  saveButtonText: {
-    color: colors.textLight,
-    fontSize: responsiveFontSize(16),
-    fontWeight: '600',
-  },
-  pickerModalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  pickerModalContent: {
-    backgroundColor: colors.surface,
-    borderRadius: moderateScale(16),
-    width: '90%',
-    maxWidth: 400,
-    padding: scale(16),
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(12),
-  },
-  pickerTitle: {
-    fontSize: responsiveFontSize(17),
-    fontWeight: '600',
-    color: colors.text,
-  },
-  pickerCloseButton: {
+  closeButton: {
     padding: scale(4),
-  },
-  pickerActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: verticalScale(16),
-  },
-  pickerCancelButton: {
-    flex: 1,
-    padding: moderateScale(12),
-    alignItems: 'center',
-    marginRight: scale(8),
-    borderRadius: moderateScale(8),
-    backgroundColor: colors.gray200,
-  },
-  pickerCancelText: {
-    color: colors.text,
-    fontSize: responsiveFontSize(15),
-    fontWeight: '600',
-  },
-  pickerConfirmButton: {
-    flex: 1,
-    padding: moderateScale(12),
-    alignItems: 'center',
-    marginLeft: scale(8),
-    borderRadius: moderateScale(8),
-    backgroundColor: colors.primary,
-  },
-  pickerConfirmText: {
-    color: colors.textLight,
-    fontSize: responsiveFontSize(15),
-    fontWeight: '600',
-  },
-  customPickerContainer: {
-    paddingVertical: verticalScale(16),
-    alignItems: 'center',
-  },
-  customPickerText: {
-    fontSize: responsiveFontSize(16),
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: verticalScale(8),
-  },
-  customPickerHint: {
-    fontSize: responsiveFontSize(13),
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: verticalScale(12),
-  },
-  customPickerControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: verticalScale(8),
-    width: '100%',
-  },
-  customPickerButton: {
-    padding: scale(8),
-    borderRadius: moderateScale(8),
-    backgroundColor: colors.gray200,
-    minWidth: widthPercentage(20),
-    alignItems: 'center',
-  },
-  customPickerLabel: {
-    fontSize: responsiveFontSize(13),
-    color: colors.text,
-    fontWeight: '500',
-  },
-  customPickerTodayButton: {
-    backgroundColor: colors.primary,
-    minWidth: widthPercentage(40),
-    marginTop: verticalScale(8),
-  },
-  customPickerTodayText: {
-    color: colors.textLight,
-    fontSize: responsiveFontSize(13),
-    fontWeight: '600',
-  },
-  calendarContainer: {
-    padding: scale(16),
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(12),
-  },
-  calendarMonthYear: {
-    fontSize: responsiveFontSize(17),
-    fontWeight: '600',
-    color: colors.text,
-  },
-  calendarDaysHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: verticalScale(8),
-    paddingVertical: verticalScale(4),
-    backgroundColor: colors.gray200,
-    borderRadius: moderateScale(6),
-  },
-  calendarDayHeader: {
-    fontSize: responsiveFontSize(13),
-    fontWeight: '600',
-    color: colors.text,
-    width: scale(28),
-    textAlign: 'center',
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  calendarDay: {
-    width: '14.28%', // 100% / 7 days
-    height: scale(32),
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: verticalScale(2),
-    borderRadius: moderateScale(16),
-  },
-  currentMonthDay: {
-    // No additional styling needed
-  },
-  otherMonthDay: {
-    opacity: 0.4,
-  },
-  selectedDay: {
-    backgroundColor: colors.primary,
-    borderRadius: scale(16),
-  },
-  calendarDayText: {
-    fontSize: responsiveFontSize(14),
-    fontWeight: '500',
-  },
-  currentMonthDayText: {
-    color: colors.text,
-  },
-  otherMonthDayText: {
-    color: colors.textSecondary,
-  },
-  timePickerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: verticalScale(24),
-    backgroundColor: colors.gray100,
-    borderRadius: moderateScale(12),
-    marginVertical: verticalScale(8),
-  },
-  timePickerRow: {
-    alignItems: 'center',
-    marginHorizontal: scale(12),
-  },
-  timePickerButton: {
-    padding: scale(6),
-    backgroundColor: colors.surface,
-    borderRadius: moderateScale(16),
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  timePickerValue: {
-    fontSize: responsiveFontSize(24),
-    fontWeight: '600',
-    color: colors.text,
-    marginVertical: verticalScale(6),
-    minWidth: scale(36),
-    textAlign: 'center',
-  },
-  timePickerColon: {
-    fontSize: responsiveFontSize(24),
-    fontWeight: '600',
-    color: colors.text,
-    marginHorizontal: scale(4),
-  },
-  timePickerAmPmContainer: {
-    flexDirection: 'row',
-    marginLeft: scale(20),
-  },
-  timePickerAmPmButton: {
-    paddingVertical: verticalScale(8),
-    paddingHorizontal: scale(12),
-    marginHorizontal: scale(6),
-    borderRadius: moderateScale(8),
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  selectedAmPmButton: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  timePickerAmPmText: {
-    fontSize: responsiveFontSize(14),
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  selectedAmPmText: {
-    color: colors.textLight,
-    fontWeight: '600',
-  },
-  heatmapNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  heatmapNavButton: {
-    paddingHorizontal: scale(8),
-    paddingVertical: verticalScale(4),
-  },
-  heatmapNavButtonCircle: {
-    width: verticalScale(36),
-    height: verticalScale(36),
-    borderRadius: verticalScale(18),
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  heatmapNavButtonText: {
-    fontSize: responsiveFontSize(22),
-    fontWeight: '700',
-    color: colors.textLight,
   },
 });
 

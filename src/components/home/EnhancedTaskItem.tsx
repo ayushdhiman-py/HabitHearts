@@ -40,6 +40,38 @@ const getDueDateStatus = (dueDate: any): 'overdue' | 'dueSoon' | 'dueInFewDays' 
   return 'later';
 };
 
+// Function to calculate time remaining
+const getTimeRemaining = (dueDate: any) => {
+  if (!dueDate) return null;
+  
+  const dueDateTime = dueDate.toDate();
+  const now = new Date();
+  const timeDiff = dueDateTime.getTime() - now.getTime();
+  
+  // If overdue
+  if (timeDiff <= 0) {
+    return 'Overdue';
+  }
+  
+  // Calculate days, hours, minutes remaining
+  const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+  
+  // If due in less than 1 hour, show minutes
+  if (days === 0 && hours === 0) {
+    return `${minutes}m`;
+  }
+  
+  // If due in less than 1 day, show hours
+  if (days === 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  
+  // Show days
+  return `${days}d ${hours}h`;
+};
+
 const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({ 
   item, 
   user, 
@@ -62,34 +94,18 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
   }, [item.id]);
 
   const getTaskPriorityColor = () => {
-    if (item.completed) return colors.success;
+    if (item.completed) return colors.electricGreenDark; // Using the dark green from the theme
     
     const status = getDueDateStatus(item.dueDate);
     switch (status) {
       case 'overdue':
         return colors.error;
       case 'dueSoon':
-        return colors.orange;
+        return colors.vibrantOrange;
       case 'dueInFewDays':
-        return colors.yellow;
+        return colors.sunnyYellow;
       default:
-        return colors.primary;
-    }
-  };
-
-  const getBackgroundColor = () => {
-    if (item.completed) return colors.successLight;
-    
-    const status = getDueDateStatus(item.dueDate);
-    switch (status) {
-      case 'overdue':
-        return colors.errorLight;
-      case 'dueSoon':
-        return colors.orangeLight;
-      case 'dueInFewDays':
-        return colors.yellowLight;
-      default:
-        return colors.surface;
+        return colors.electricBlue;
     }
   };
 
@@ -135,7 +151,7 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
   };
 
   const priorityColor = getTaskPriorityColor();
-  const backgroundColor = getBackgroundColor();
+  const timeRemaining = getTimeRemaining(item.dueDate);
 
   return (
     <Swipeable
@@ -147,15 +163,13 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
         swipeableManager.closeAllExcept(item.id);
       }}
     >
-      <View style={[styles.taskItem, { backgroundColor }]}>
+      <TouchableOpacity 
+        style={styles.taskItem}
+        onPress={() => onToggleTask(item)}
+        activeOpacity={0.7}
+      >
         <View style={styles.taskContent}>
-          <TouchableOpacity
-            style={styles.checkboxContainer}
-            onPress={(e) => {
-              e.stopPropagation();
-              onToggleTask(item);
-            }}
-          >
+          <View style={styles.checkboxContainer}>
             <View style={[styles.checkbox, { borderColor: priorityColor }]}>
               {item.completed && (
                 <Icon 
@@ -165,37 +179,34 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
                 />
               )}
             </View>
-          </TouchableOpacity>
+          </View>
           
           <View style={styles.taskTextContainer}>
             <Text 
               style={[
                 styles.taskText, 
-                item.completed && styles.completedTask,
-                { borderLeftColor: priorityColor }
+                item.completed && styles.completedTask
               ]}
+              numberOfLines={1}
             >
               {item.text}
             </Text>
             
             {item.description && (
-              <Text style={styles.taskDescription} numberOfLines={1}>
+              <Text style={[styles.taskDescription]} numberOfLines={1}>
                 {item.description}
               </Text>
             )}
-            
-            {item.dueDate && (
-              <Text style={styles.dueDateText}>
-                Due: {item.dueDate.toDate().toLocaleDateString()}
-              </Text>
-            )}
-            
-            {item.createdBy !== user?.uid && (
-              <Text style={styles.creatorText}>
-                by {item.creatorName}
-              </Text>
-            )}
           </View>
+          
+          {/* Due time indicator */}
+          {item.dueDate && timeRemaining && (
+            <View style={styles.timeIndicator}>
+              <Text style={[styles.timeText, { color: priorityColor }]}>
+                {timeRemaining}
+              </Text>
+            </View>
+          )}
           
           <TouchableOpacity
             style={styles.detailButton}
@@ -212,32 +223,32 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
             />
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     </Swipeable>
   );
 };
 
 const styles = StyleSheet.create({
   taskItem: {
-    borderRadius: 12,
-    marginBottom: verticalScale(8),
+    backgroundColor: colors.surface,
+    marginBottom: verticalScale(6),
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(8),
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
   },
   taskContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: verticalScale(12),
-    paddingHorizontal: scale(16),
   },
   checkboxContainer: {
-    marginRight: scale(12),
+    marginRight: scale(10),
   },
   checkbox: {
-    width: scale(24),
-    height: scale(24),
-    borderRadius: scale(12),
+    width: scale(22),
+    height: scale(22),
+    borderRadius: scale(11),
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -248,54 +259,49 @@ const styles = StyleSheet.create({
     marginRight: scale(8),
   },
   taskText: {
-    fontSize: responsiveFontSize(16),
+    fontSize: responsiveFontSize(15),
     color: colors.text,
     fontWeight: '500',
-    lineHeight: responsiveFontSize(22),
-    borderLeftWidth: 3,
-    paddingLeft: scale(8),
-    marginBottom: verticalScale(2),
+    lineHeight: responsiveFontSize(20),
   },
   completedTask: {
     textDecorationLine: 'line-through',
     color: colors.textSecondary,
   },
   taskDescription: {
-    fontSize: responsiveFontSize(13),
-    color: colors.textSecondary,
-    lineHeight: responsiveFontSize(18),
-    marginBottom: verticalScale(2),
-  },
-  dueDateText: {
     fontSize: responsiveFontSize(12),
     color: colors.textSecondary,
-    fontStyle: 'italic',
-    marginBottom: verticalScale(2),
+    lineHeight: responsiveFontSize(16),
+    marginTop: verticalScale(2),
   },
-  creatorText: {
-    fontSize: responsiveFontSize(11),
-    color: colors.secondary,
+  timeIndicator: {
+    marginRight: scale(8),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeText: {
+    fontSize: responsiveFontSize(10),
     fontWeight: '600',
   },
   detailButton: {
-    padding: scale(4),
+    padding: scale(2),
   },
   rightActionsContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingHorizontal: scale(10),
+    paddingHorizontal: scale(8),
   },
   actionButton: {
-    width: scale(36),
-    height: scale(36),
-    borderRadius: scale(18),
+    width: scale(32),
+    height: scale(32),
+    borderRadius: scale(16),
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: scale(5),
+    marginHorizontal: scale(4),
   },
   editButton: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.hotPink,
   },
   deleteButton: {
     backgroundColor: colors.error,

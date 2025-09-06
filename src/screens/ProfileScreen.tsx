@@ -127,7 +127,7 @@ const ProfileScreen = () => {
         
         {loading ? (
           <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color={colors.electricBlue} />
             <Text style={styles.loadingText}>Loading profile...</Text>
           </View>
         ) : (
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     width: widthPercentage(20),
     height: widthPercentage(20),
     borderRadius: widthPercentage(10),
-    backgroundColor: colors.primary,
+    backgroundColor: colors.electricBlue,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: verticalScale(16),
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   codeContainer: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.electricBlue,
     padding: moderateScale(16),
     borderRadius: moderateScale(8),
     alignItems: 'center',
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkButton: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.hotPink,
     marginLeft: scale(8),
     paddingHorizontal: scale(16),
   },
@@ -308,7 +308,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: verticalScale(12),
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
   },
   linkedUserInfo: {
     flexDirection: 'row',
@@ -318,7 +317,7 @@ const styles = StyleSheet.create({
     width: verticalScale(40),
     height: verticalScale(40),
     borderRadius: verticalScale(20),
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.hotPink,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: scale(12),

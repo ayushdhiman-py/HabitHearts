@@ -25,14 +25,13 @@ const BottomTabNavigator = () => {
           paddingTop: verticalScale(8),
         },
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
+        tabBarActiveTintColor: colors.electricBlue,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarLabelStyle: {
           fontSize: responsiveFontSize(11),
           fontWeight: '600',
           marginBottom: verticalScale(3),
         },
-        contentStyle: { flex: 1 } // Ensure full height for tab content
       }}>
       <Tab.Screen
         name="Home"

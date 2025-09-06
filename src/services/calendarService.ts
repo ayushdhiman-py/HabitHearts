@@ -16,12 +16,16 @@ import { notificationService } from './notificationService';
 export interface CalendarEvent {
   id: string;
   title: string;
-  date: Date;
+  date: Date | { seconds: number } | string;
+  endDate?: Date | { seconds: number } | string;
+  startTime?: string; // Added startTime field
+  endTime?: string; // Added endTime field
   createdBy: string;
   creatorName: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   status: string;
+  emoji?: string; // Added emoji field
 }
 
 // Create a new calendar event

@@ -4,7 +4,6 @@ import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { auth } from './firebaseConfig';
 import { StatusBar, Platform } from 'react-native';
-import { premiumColors } from './src/theme/premiumTheme';
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 

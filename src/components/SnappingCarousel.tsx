@@ -136,13 +136,13 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginHorizontal: 4,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.electricBlueLight,
   },
   activeIndicator: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.electricBlue,
   },
   inactiveIndicator: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.electricBlueLight,
   },
 });
 

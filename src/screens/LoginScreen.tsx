@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
     height: responsiveFontSize(20),
   },
   buttonText: {
-    color: 'black',
+    color: colors.text,
     fontWeight: '600',
   },
   description: {

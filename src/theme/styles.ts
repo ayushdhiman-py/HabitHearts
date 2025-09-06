@@ -34,14 +34,7 @@ export default StyleSheet.create({
     marginVertical: verticalScale(8),
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    // Flat surface with no shadow
   },
   sectionTitle: {
     fontSize: responsiveFontSize(18),
@@ -59,7 +52,7 @@ export default StyleSheet.create({
     color: colors.text,
   },
   button: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.electricBlue,
     borderRadius: moderateScale(8),
     paddingVertical: verticalScale(12),
     paddingHorizontal: scale(16),
@@ -73,21 +66,21 @@ export default StyleSheet.create({
     fontWeight: '600',
   },
   secondaryButton: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.hotPink,
   },
   tertiaryButton: {
-    backgroundColor: colors.gray200,
+    backgroundColor: colors.electricBlueLight,
   },
   outlineButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.electricBlue,
   },
   outlineButtonText: {
-    color: colors.primary,
+    color: colors.electricBlue,
   },
   disabledButton: {
-    backgroundColor: colors.gray300,
+    backgroundColor: colors.electricBlueLight,
   },
   text: {
     fontSize: responsiveFontSize(16),
