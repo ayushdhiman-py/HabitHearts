@@ -1,19 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, TextInput, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, Image, ActivityIndicator, FlatList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { createUserDocument, getUserByUniqueCode, linkUsers, getLinkedUsers } from '../services/userService';
+import { useStatusBar } from '../context/StatusBarContext';
+import { useTheme } from '../context/ThemeContext';
+import { generateUniqueCode, linkUsers, getLinkedUsers, User, createUserDocument, getUserByUniqueCode } from '../services/userService';
+import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage } from '../utils/responsive';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
-import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
-
-interface User {
-  uid: string;
-  displayName?: string;
-  email?: string;
-  photoURL?: string;
-}
+import { getTextColorForBackground } from '../utils/colorUtils';
+import { getButtonColor } from '../utils/buttonUtils';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 interface LinkedUser {
   uid: string;
@@ -22,6 +20,20 @@ interface LinkedUser {
   uniqueCode: string;
 }
 
+// Define available theme colors
+const THEME_COLORS = [
+  colors.hotPink,
+  colors.electricBlue,
+  colors.electricGreen,
+  colors.vibrantOrange,
+  colors.brightPurple,
+  colors.sunnyYellow,
+  colors.brightRed,
+  colors.mint,
+  colors.textLight
+];
+
+// Memoize the component to prevent unnecessary re-renders
 const ProfileScreen = () => {
   const { user, logout } = useAuth() as { user: User | null; logout: () => void };
   const [uniqueCode, setUniqueCode] = useState('');
@@ -29,7 +41,13 @@ const ProfileScreen = () => {
   const [linkedUsers, setLinkedUsers] = useState<LinkedUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [linking, setLinking] = useState(false);
-  const insets = useSafeAreaInsets();
+  const { screenBackgroundColor, backgroundColor, themePalette } = useStatusBar();
+  const { selectedTheme, setSelectedTheme } = useTheme();
+
+  useEffect(() => {
+    // The StatusBarContext will automatically use the selected theme
+    // No need to set status bar manually here
+  }, []);
 
   useEffect(() => {
     const initializeUser = async () => {
@@ -118,107 +136,142 @@ const ProfileScreen = () => {
     }
   };
 
+  // Render color theme options
+  const renderColorOption = ({ item }: { item: string }) => (
+    <TouchableOpacity
+      style={[
+        styles.colorOption,
+        { backgroundColor: item },
+        selectedTheme === item && styles.selectedColorOption
+      ]}
+      onPress={() => setSelectedTheme(item)}
+    />
+  );
+
   return (
-    <View style={[globalStyles.container, { paddingTop: insets.top }]}>
-      <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
-        <Text style={styles.title}>Profile</Text>
-      </View>
-      
-      <ScrollView style={globalStyles.flex1} contentContainerStyle={{ marginTop: verticalScale(16) }}>
-        {loading ? (
-          <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
-            <ActivityIndicator size="large" color={colors.electricBlue} />
-            <Text style={styles.loadingText}>Loading profile...</Text>
-          </View>
-        ) : (
-          <>
-            <View style={globalStyles.card}>
-              <View style={styles.profileInfo}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U'}
-                  </Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+      <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
+        <View style={[styles.header, { backgroundColor: backgroundColor }]}>
+          <Text style={[styles.title, { color: getTextColorForBackground(backgroundColor) }]}>Profile</Text>
+          <TouchableOpacity
+            style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary) }]}
+          >
+            <Icon name="add" size={responsiveFontSize(24)} color={colors.textLight} />
+          </TouchableOpacity>
+        </View>
+        
+        <ScrollView style={globalStyles.flex1} contentContainerStyle={{ marginTop: verticalScale(16) }}>
+          {loading ? (
+            <View style={[styles.loadingContainer]}>
+              <ActivityIndicator size="large" color={colors.electricBlue} />
+              <Text style={styles.loadingText}>Loading profile...</Text>
+            </View>
+          ) : (
+            <>
+              <View style={globalStyles.card}>
+                <View style={styles.profileInfo}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U'}
+                    </Text>
+                  </View>
+                  <Text style={styles.name}>{user?.displayName || 'User'}</Text>
+                  <Text style={styles.email}>{user?.email || 'No email'}</Text>
                 </View>
-                <Text style={styles.name}>{user?.displayName || 'User'}</Text>
-                <Text style={styles.email}>{user?.email || 'No email'}</Text>
               </View>
-            </View>
 
-            {/* Unique Code Section */}
-            <View style={globalStyles.card}>
-              <Text style={globalStyles.sectionTitle}>Your Unique Code</Text>
-              <View style={styles.codeContainer}>
-                <Text style={styles.codeText}>{uniqueCode || 'Generating...'}</Text>
-              </View>
-              <Text style={styles.codeDescription}>
-                Share this code with your partner to link your accounts
-              </Text>
-            </View>
-
-            {/* Link User Section */}
-            <View style={globalStyles.card}>
-              <Text style={globalStyles.sectionTitle}>Link with Your Partner</Text>
-              <View style={styles.linkContainer}>
-                <TextInput
-                  style={globalStyles.input}
-                  placeholder="Enter partner's unique code"
-                  value={linkCode}
-                  onChangeText={setLinkCode}
-                  autoCapitalize="none"
-                  editable={!linking}
+              {/* Theme Selection Section */}
+              <View style={globalStyles.card}>
+                <Text style={globalStyles.sectionTitle}>App Theme</Text>
+                <Text style={styles.themeDescription}>
+                  Select your preferred color theme for the app
+                </Text>
+                <FlatList
+                  data={THEME_COLORS}
+                  renderItem={renderColorOption}
+                  keyExtractor={(item, index) => index.toString()}
+                  horizontal={true}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.colorOptionsContainer}
                 />
-                <TouchableOpacity 
-                  style={[globalStyles.button, styles.linkButton, linking && globalStyles.disabledButton]} 
-                  onPress={handleLinkUser}
-                  disabled={linking}
-                >
-                  {linking ? (
-                    <ActivityIndicator color={colors.textLight} size="small" />
-                  ) : (
-                    <Text style={globalStyles.buttonText}>Link</Text>
-                  )}
+              </View>
+
+              {/* Unique Code Section */}
+              <View style={globalStyles.card}>
+                <Text style={globalStyles.sectionTitle}>Your Unique Code</Text>
+                <View style={styles.codeContainer}>
+                  <Text style={styles.codeText}>{uniqueCode || 'Generating...'}</Text>
+                </View>
+                <Text style={styles.codeDescription}>
+                  Share this code with your partner to link your accounts
+                </Text>
+              </View>
+
+              {/* Link User Section */}
+              <View style={globalStyles.card}>
+                <Text style={globalStyles.sectionTitle}>Link with Your Partner</Text>
+                <View style={styles.linkContainer}>
+                  <TextInput
+                    style={globalStyles.input}
+                    placeholder="Enter partner's unique code"
+                    value={linkCode}
+                    onChangeText={setLinkCode}
+                    autoCapitalize="none"
+                    editable={!linking}
+                  />
+                  <TouchableOpacity 
+                    style={[globalStyles.button, styles.linkButton, linking && globalStyles.disabledButton, {backgroundColor: getButtonColor(themePalette.primary)}]} 
+                    onPress={handleLinkUser}
+                    disabled={linking}
+                  >
+                    {linking ? (
+                      <ActivityIndicator color={colors.textLight} size="small" />
+                    ) : (
+                      <Text style={globalStyles.buttonText}>Link</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Linked Users Section */}
+              {linkedUsers.length > 0 && (
+                <View style={globalStyles.card}>
+                  <Text style={globalStyles.sectionTitle}>Linked Partners</Text>
+                  {linkedUsers.map((linkedUser) => (
+                    <View key={linkedUser.uid} style={styles.linkedUserItem}>
+                      <View style={styles.linkedUserInfo}>
+                        <View style={styles.linkedUserAvatar}>
+                          <Text style={styles.linkedUserAvatarText}>
+                            {linkedUser.displayName?.charAt(0) || linkedUser.email?.charAt(0) || 'P'}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={styles.linkedUserName}>
+                            {linkedUser.displayName || linkedUser.email}
+                          </Text>
+                          <Text style={styles.linkedUserCode}>
+                            Code: {linkedUser.uniqueCode}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.heartIcon}>
+                        <Text style={styles.heartEmoji}>❤️</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity style={[globalStyles.button, styles.signOutButton, {backgroundColor: getButtonColor(themePalette.primary)}]} onPress={signOut}>
+                  <Text style={globalStyles.buttonText}>Sign Out</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-
-            {/* Linked Users Section */}
-            {linkedUsers.length > 0 && (
-              <View style={globalStyles.card}>
-                <Text style={globalStyles.sectionTitle}>Linked Partners</Text>
-                {linkedUsers.map((linkedUser) => (
-                  <View key={linkedUser.uid} style={styles.linkedUserItem}>
-                    <View style={styles.linkedUserInfo}>
-                      <View style={styles.linkedUserAvatar}>
-                        <Text style={styles.linkedUserAvatarText}>
-                          {linkedUser.displayName?.charAt(0) || linkedUser.email?.charAt(0) || 'P'}
-                        </Text>
-                      </View>
-                      <View>
-                        <Text style={styles.linkedUserName}>
-                          {linkedUser.displayName || linkedUser.email}
-                        </Text>
-                        <Text style={styles.linkedUserCode}>
-                          Code: {linkedUser.uniqueCode}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.heartIcon}>
-                      <Text style={styles.heartEmoji}>❤️</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={[globalStyles.button, styles.signOutButton]} onPress={signOut}>
-                <Text style={globalStyles.buttonText}>Sign Out</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </ScrollView>
-    </View>
+            </>
+          )}
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -234,9 +287,7 @@ const styles = StyleSheet.create({
   },
   headerAddButton: {
     padding: scale(12),
-    backgroundColor: colors.electricBlue,
     borderRadius: moderateScale(16),
-    shadowColor: colors.electricBlue,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -246,8 +297,8 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   title: {
-    fontSize: responsiveFontSize(22),
-    fontWeight: '600',
+    fontSize: responsiveFontSize(24),
+    fontWeight: '700',
     textAlign: 'center',
     color: colors.text,
   },
@@ -289,6 +340,35 @@ const styles = StyleSheet.create({
   email: {
     fontSize: responsiveFontSize(15),
     color: colors.textSecondary,
+  },
+  themeDescription: {
+    fontSize: responsiveFontSize(13),
+    color: colors.textSecondary,
+    marginBottom: verticalScale(12),
+    textAlign: 'center',
+  },
+  colorOptionsContainer: {
+    paddingVertical: verticalScale(8),
+  },
+  colorOption: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: moderateScale(20),
+    marginHorizontal: scale(8),
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  selectedColorOption: {
+    borderWidth: 3,
+    borderColor: colors.text,
+    shadowColor: colors.text,
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 5,
   },
   codeContainer: {
     backgroundColor: colors.electricBlue,
@@ -369,6 +449,6 @@ const styles = StyleSheet.create({
   signOutButton: {
     backgroundColor: colors.error,
   },
-});
 
+});
 export default ProfileScreen;

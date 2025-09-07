@@ -6,7 +6,6 @@ export default StyleSheet.create({
   // Global styles
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
@@ -52,7 +51,6 @@ export default StyleSheet.create({
     color: colors.text,
   },
   button: {
-    backgroundColor: colors.electricBlue,
     borderRadius: moderateScale(8),
     paddingVertical: verticalScale(12),
     paddingHorizontal: scale(16),

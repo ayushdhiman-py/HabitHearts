@@ -1,11 +1,12 @@
 import React, { useEffect } from 'react';
-import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { auth } from './firebaseConfig';
-import { StatusBar, Platform } from 'react-native';
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StatusBarProvider } from './src/context/StatusBarContext';
+import { ThemeProvider } from './src/context/ThemeContext';
 
 const App = () => {
   useEffect(() => {
@@ -25,12 +26,13 @@ const App = () => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar 
-          barStyle="dark-content" 
-        />
-        <AuthProvider>
-          <AppNavigator />
-        </AuthProvider>
+        <ThemeProvider>
+          <StatusBarProvider>
+            <AuthProvider>
+              <AppNavigator />
+            </AuthProvider>
+          </StatusBarProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

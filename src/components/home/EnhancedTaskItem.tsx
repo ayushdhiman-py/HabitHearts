@@ -182,19 +182,32 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
           </View>
           
           <View style={styles.taskTextContainer}>
-            <Text 
-              style={[
-                styles.taskText, 
-                item.completed && styles.completedTask
-              ]}
-              numberOfLines={1}
-            >
-              {item.text}
-            </Text>
+            <View style={styles.taskHeader}>
+              {/* Display emoji if available */}
+              {item.emoji && (
+                <Text style={styles.taskEmoji}>{item.emoji}</Text>
+              )}
+              <Text 
+                style={[
+                  styles.taskText, 
+                  item.completed && styles.completedTask
+                ]}
+                numberOfLines={1}
+              >
+                {item.text}
+              </Text>
+            </View>
             
             {item.description && (
               <Text style={[styles.taskDescription]} numberOfLines={1}>
                 {item.description}
+              </Text>
+            )}
+            
+            {/* Display time if available */}
+            {item.startTime && item.endTime && (
+              <Text style={styles.taskTime}>
+                {item.startTime} - {item.endTime}
               </Text>
             )}
           </View>
@@ -258,6 +271,14 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: scale(8),
   },
+  taskHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  taskEmoji: {
+    fontSize: responsiveFontSize(16),
+    marginRight: scale(6),
+  },
   taskText: {
     fontSize: responsiveFontSize(15),
     color: colors.text,
@@ -272,6 +293,12 @@ const styles = StyleSheet.create({
     fontSize: responsiveFontSize(12),
     color: colors.textSecondary,
     lineHeight: responsiveFontSize(16),
+    marginTop: verticalScale(2),
+  },
+  taskTime: {
+    fontSize: responsiveFontSize(11),
+    color: colors.textSecondary,
+    fontStyle: 'italic',
     marginTop: verticalScale(2),
   },
   timeIndicator: {

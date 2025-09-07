@@ -1,16 +1,40 @@
-import React, { useState, useEffect, useRef, useCallback, useReducer } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, TextInput, ActivityIndicator, ScrollView, FlatList, Animated, Platform, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Modal,
+  TouchableOpacity,
+  Alert,
+  StatusBar,
+  Dimensions,
+  TextInput,
+  BackHandler,
+  Platform,
+  Animated,
+  Image,
+  InteractionManager,
+  KeyboardAvoidingView,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { subscribeToCalendarEventsForUserAndLinked, createCalendarEvent, deleteCalendarEvent, updateCalendarEvent, CalendarEvent } from '../services/calendarService';
-import { getLinkedUsers } from '../services/userService';
-import { notificationService } from '../services/notificationService';
+import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, CalendarEvent, subscribeToCalendarEventsForUserAndLinked } from '../services/calendarService';
+import { getLinkedUsers, User as UserServiceUser } from '../services/userService';
+import { getGoalsForUserAndLinked, subscribeToGoalsForUserAndLinked } from '../services/goalService';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
+import { useStatusBar } from '../context/StatusBarContext';
+import { getTextColorForBackground } from '../utils/colorUtils';
+import { getButtonColor } from '../utils/buttonUtils';
+
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import LinearGradient from 'react-native-linear-gradient';
+import { Timestamp } from 'firebase/firestore';
+import { swipeableManager } from '../utils/swipeableManager';
 import EnhancedEventItem from '../components/home/EnhancedEventItem';
+import notificationService from '../services/notificationService';
 
 interface LinkedUser {
   uid: string;
@@ -30,7 +54,9 @@ interface AuthUser {
   email?: string;
 }
 
+// Memoize the component to prevent unnecessary re-renders
 const CalendarScreen = () => {
+  const { screenBackgroundColor, backgroundColor, themePalette } = useStatusBar();
   const { user } = useAuth() as { user: AuthUser };
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -54,7 +80,32 @@ const CalendarScreen = () => {
   const [editEndHour, setEditEndHour] = useState(0);
   const [editEndMinute, setEditEndMinute] = useState(0);
   const [editModalVisible, setEditModalVisible] = useState(false);
-  
+
+  // Define emoji arrays as constants to prevent recreation on each render
+  const row1Emojis = [
+    // Row 1 - Events, Activities, Objects
+    '🎯', '🎉', '🥳', '🎊', '🎂', '🎁', '🎈', '🎆', '🎇', '🧨',
+    '✨', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎬', '🎭', '🎨',
+    '🎪', '🎫', '🎟️', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
+    '🎤', '🎧', '🎮', '🎲', '♟️', '⚽', '🏀', '🏈', '⚾', '🎾',
+    '🏐', '🏉', '🎱', '🪀', '乒乓球', '🏸', '🥅', '⛳', '🪁', '🏹',
+    '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '⛸️', '🥌', '🎿',
+    '⛷️', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️',
+    '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆'
+  ];
+
+  const row2Emojis = [
+    // Row 2 - Food, Nature, Faces, Hearts
+    '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒',
+    '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬',
+    '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐',
+    '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇',
+    '🥓', '🥩', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪',
+    '🥗', '🍿', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍮', '🎂',
+    '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
+    '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚'
+  ];
+
   // Memoized callbacks for time picker value changes
   const handleStartHourChange = useCallback((value: number) => {
     setStartHour(value);
@@ -71,7 +122,13 @@ const CalendarScreen = () => {
   const handleEndMinuteChange = useCallback((value: number) => {
     setEndMinute(value);
   }, []);
-  
+
+  // Set status bar for calendar screen
+  useEffect(() => {
+    // The StatusBarContext will automatically use the selected theme
+    // No need to set status bar manually here
+  }, []);
+
   // Reset time values when modal opens
   useEffect(() => {
     if (modalVisible) {
@@ -422,7 +479,7 @@ const CalendarScreen = () => {
     setSelectedEvent(eventItem);
     setEditEventTitle(eventItem.title);
     setEditEventEmoji(eventItem.emoji || '🎯');
-    
+
     // Parse start time if it exists
     if (eventItem.startTime) {
       const [hour, minute] = eventItem.startTime.split(':').map(Number);
@@ -432,7 +489,7 @@ const CalendarScreen = () => {
       setEditStartHour(0);
       setEditStartMinute(0);
     }
-    
+
     // Parse end time if it exists
     if (eventItem.endTime) {
       const [hour, minute] = eventItem.endTime.split(':').map(Number);
@@ -442,17 +499,17 @@ const CalendarScreen = () => {
       setEditEndHour(0);
       setEditEndMinute(0);
     }
-    
+
     setEditModalVisible(true);
   };
 
   const handleUpdateEvent = async () => {
     if (!selectedEvent) return;
-    
+
     try {
       const startTimeString = `${editStartHour.toString().padStart(2, '0')}:${editStartMinute.toString().padStart(2, '0')}`;
       const endTimeString = `${editEndHour.toString().padStart(2, '0')}:${editEndMinute.toString().padStart(2, '0')}`;
-      
+
       // Update the event with new values
       await updateCalendarEvent(selectedEvent.id, {
         title: editEventTitle.trim(),
@@ -461,7 +518,7 @@ const CalendarScreen = () => {
         emoji: editEventEmoji,
         updatedAt: new Date() as any
       });
-      
+
       setEditModalVisible(false);
       setSelectedEvent(null);
     } catch (error) {
@@ -508,14 +565,14 @@ const CalendarScreen = () => {
   };
 
   // Simple Time Picker Component
-  const TimePicker = React.memo(({ 
-    items, 
-    selectedValue, 
-    onValueChange 
-  }: { 
-    items: number[]; 
-    selectedValue: number; 
-    onValueChange: (value: number) => void; 
+  const TimePicker = React.memo(({
+    items,
+    selectedValue,
+    onValueChange
+  }: {
+    items: number[];
+    selectedValue: number;
+    onValueChange: (value: number) => void;
   }) => {
     const itemHeight = 40;
     const scrollViewRef = useRef<ScrollView>(null);
@@ -535,7 +592,7 @@ const CalendarScreen = () => {
           }
         }
       }, 150);
-      
+
       return () => {
         clearTimeout(timer);
         if (timeoutRef.current) {
@@ -547,22 +604,22 @@ const CalendarScreen = () => {
     const handleScroll = (event: any) => {
       const y = event.nativeEvent.contentOffset.y;
       setScrollY(y);
-      
+
       if (!isScrolling.current) return;
-      
+
       // Adjust for the top padding (40px)
       const adjustedY = Math.max(0, y);
       // Calculate index with proper rounding
       const index = Math.round(adjustedY / itemHeight);
       // Ensure index is within bounds
       const clampedIndex = Math.min(Math.max(index, 0), items.length - 1);
-      
+
       if (clampedIndex >= 0 && clampedIndex < items.length) {
         // Clear any existing timeout
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
         }
-        
+
         // Update selection during scroll for visual feedback with a small delay
         timeoutRef.current = setTimeout(() => {
           if (items[clampedIndex] !== selectedValue) {
@@ -583,25 +640,25 @@ const CalendarScreen = () => {
 
     const handleMomentumScrollEnd = (event: any) => {
       isScrolling.current = false;
-      
+
       // Update scroll position
       const y = event.nativeEvent.contentOffset.y;
       setScrollY(y);
-      
+
       // Calculate the final position
       const adjustedY = Math.max(0, y);
-      
+
       // Determine the closest item
       const index = Math.round(adjustedY / itemHeight);
       const clampedIndex = Math.min(Math.max(index, 0), items.length - 1);
-      
+
       if (clampedIndex >= 0 && clampedIndex < items.length) {
         // Scroll to the exact position to ensure proper alignment
         const targetY = clampedIndex * itemHeight;
         if (scrollViewRef.current) {
           scrollViewRef.current.scrollTo({ y: targetY, animated: true });
         }
-        
+
         // Update the value if it changed
         if (items[clampedIndex] !== selectedValue) {
           onValueChange(items[clampedIndex]);
@@ -610,14 +667,14 @@ const CalendarScreen = () => {
     };
 
     // Function to determine if an item should have transparent text
-  const isItemTransparent = (index: number) => {
-    // Calculate the position of this item's top edge
-    // Each item is 40px tall, and there's 40px padding at the top
-    const itemTopPosition = (index * itemHeight) + 40;
-    
-    // If the item's top edge is above the scroll position, it's scrolled out
-    return itemTopPosition < scrollY;
-  };
+    const isItemTransparent = (index: number) => {
+      // Calculate the position of this item's top edge
+      // Each item is 40px tall, and there's 40px padding at the top
+      const itemTopPosition = (index * itemHeight) + 40;
+
+      // If the item's top edge is above the scroll position, it's scrolled out
+      return itemTopPosition < scrollY;
+    };
 
     return (
       <View style={{
@@ -640,7 +697,7 @@ const CalendarScreen = () => {
           zIndex: 1,
           pointerEvents: 'none',
         }} />
-        
+
         <ScrollView
           ref={scrollViewRef}
           showsVerticalScrollIndicator={false}
@@ -654,8 +711,8 @@ const CalendarScreen = () => {
           {/* Add padding at the top for the first item to be centered */}
           <View style={{ height: 40 }} />
           {items.map((item, index) => (
-            <View 
-              key={index} 
+            <View
+              key={index}
               style={{
                 height: itemHeight,
                 justifyContent: 'center',
@@ -689,10 +746,10 @@ const CalendarScreen = () => {
   // Render time picker with proper selection handling
   const renderTimePicker = useCallback((items: number[], selectedValue: number, onValueChange: (value: number) => void) => {
     return (
-      <TimePicker 
-        items={items} 
-        selectedValue={selectedValue} 
-        onValueChange={onValueChange} 
+      <TimePicker
+        items={items}
+        selectedValue={selectedValue}
+        onValueChange={onValueChange}
       />
     );
   }, []);
@@ -875,7 +932,7 @@ const CalendarScreen = () => {
     setEndHour(0); // Reset to 00
     setEndMinute(0); // Reset to 00
     setModalVisible(true);
-    
+
     // Ensure time pickers reset to 00:00 with a small delay
     setTimeout(() => {
       setStartHour(0);
@@ -943,350 +1000,312 @@ const CalendarScreen = () => {
   };
 
   return (
-    <View style={[globalStyles.container, { paddingTop: insets.top }]}>
-      <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
-        <Text style={styles.title}>Your Events</Text>
-        <TouchableOpacity
-          style={styles.headerAddButton}
-          onPress={openAddEventModal}
-        >
-          <Icon name="add" size={responsiveFontSize(24)} color={colors.textLight} />
-        </TouchableOpacity>
-      </View>
-      <ScrollView style={styles.mainScrollView}>
-        <View style={{ marginTop: verticalScale(16) }}>
-
-        {/* View Mode Selector */}
-        <View style={styles.viewModeContainer}>
-          <View style={styles.segmentedControlContainer}>
-            <TouchableOpacity
-              style={[styles.segmentedButton, viewMode === 'day' && styles.segmentedButtonActive]}
-              onPress={() => setViewMode('day')}
-            >
-              <Text style={[styles.segmentedButtonText, viewMode === 'day' && styles.segmentedButtonTextActive]}>Day</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentedButton, viewMode === 'week' && styles.segmentedButtonActive]}
-              onPress={() => setViewMode('week')}
-            >
-              <Text style={[styles.segmentedButtonText, viewMode === 'week' && styles.segmentedButtonTextActive]}>Week</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentedButton, viewMode === 'month' && styles.segmentedButtonActive]}
-              onPress={() => setViewMode('month')}
-            >
-              <Text style={[styles.segmentedButtonText, viewMode === 'month' && styles.segmentedButtonTextActive]}>Month</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Calendar Navigation */}
-        <View style={styles.calendarHeader}>
-          <TouchableOpacity style={styles.navButton} onPress={navigateToPrevious}>
-            <Text style={styles.navButtonText}>‹</Text>
-          </TouchableOpacity>
-          <View style={styles.calendarHeaderCenter}>
-            <Text style={styles.headerText}>{getViewTitle()}</Text>
-            <TouchableOpacity onPress={navigateToToday}>
-              <Text style={styles.todayButton}>Today</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={styles.navButton} onPress={navigateToNext}>
-            <Text style={styles.navButtonText}>›</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+      <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
+        <View style={[styles.header, { backgroundColor: backgroundColor }]}>
+          <Text style={[styles.title, { color: getTextColorForBackground(backgroundColor) }]}>Your Events</Text>
+          <TouchableOpacity
+            style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary) }]}
+            onPress={openAddEventModal}
+          >
+            <Icon name="add" size={responsiveFontSize(24)} color={colors.textLight} />
           </TouchableOpacity>
         </View>
+        <ScrollView style={styles.mainScrollView}>
+          <View style={{ marginTop: verticalScale(16) }}>
 
-        {/* Calendar View */}
-        <View style={styles.calendarContainer}>
-          {viewMode === 'month' && renderMonthView()}
-          {viewMode === 'week' && renderWeekView()}
-          {viewMode === 'day' && renderDayView()}
-        </View>
-
-        {/* Events Section at the Bottom */}
-        <View style={styles.eventsSection}>
-          <View style={styles.eventsHeader}>
-            <Text style={styles.eventsTitle}>Events this period</Text>
-            <Text style={styles.eventsCount}>{events.length} events</Text>
-          </View>
-          {loading ? (
-            <View style={styles.emptyEventsContainer}>
-              <ActivityIndicator size="small" color={colors.electricBlue} />
-              <Text style={styles.emptyEventsText}>Loading events...</Text>
+            {/* View Mode Selector */}
+            <View style={styles.viewModeContainer}>
+              <View style={styles.segmentedControlContainer}>
+                <TouchableOpacity
+                  style={[styles.segmentedButton, viewMode === 'day' && styles.segmentedButtonActive]}
+                  onPress={() => setViewMode('day')}
+                >
+                  <Text style={[styles.segmentedButtonText, viewMode === 'day' && styles.segmentedButtonTextActive]}>Day</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.segmentedButton, viewMode === 'week' && styles.segmentedButtonActive]}
+                  onPress={() => setViewMode('week')}
+                >
+                  <Text style={[styles.segmentedButtonText, viewMode === 'week' && styles.segmentedButtonTextActive]}>Week</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.segmentedButton, viewMode === 'month' && styles.segmentedButtonActive]}
+                  onPress={() => setViewMode('month')}
+                >
+                  <Text style={[styles.segmentedButtonText, viewMode === 'month' && styles.segmentedButtonTextActive]}>Month</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          ) : events.length > 0 ? (
-            <View style={styles.eventsListContainer}>
-              {events.map((event, index) => (
-                <View key={`${event.id}-${event.updatedAt?.seconds || event.updatedAt || index}`} style={{ marginBottom: index === events.length - 1 ? verticalScale(16) : 0 }}>
-                  {renderEvent({ item: event })}
+
+            {/* Calendar Navigation */}
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity style={styles.navButton} onPress={navigateToPrevious}>
+                <Text style={styles.navButtonText}>‹</Text>
+              </TouchableOpacity>
+              <View style={styles.calendarHeaderCenter}>
+                <Text style={styles.headerText}>{getViewTitle()}</Text>
+                <TouchableOpacity onPress={navigateToToday}>
+                  <Text style={styles.todayButton}>Today</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={styles.navButton} onPress={navigateToNext}>
+                <Text style={styles.navButtonText}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Calendar View */}
+            <View style={styles.calendarContainer}>
+              {viewMode === 'month' && renderMonthView()}
+              {viewMode === 'week' && renderWeekView()}
+              {viewMode === 'day' && renderDayView()}
+            </View>
+
+            {/* Events Section at the Bottom */}
+            <View style={styles.eventsSection}>
+              <View style={styles.eventsHeader}>
+                <Text style={styles.eventsTitle}>Events this period</Text>
+                <Text style={styles.eventsCount}>{events.length} events</Text>
+              </View>
+              {loading ? (
+                <View style={styles.emptyEventsContainer}>
+                  <ActivityIndicator size="small" color={colors.electricBlue} />
+                  <Text style={styles.emptyEventsText}>Loading events...</Text>
                 </View>
-              ))}
+              ) : events.length > 0 ? (
+                <View style={styles.eventsListContainer}>
+                  {events.map((event, index) => (
+                    <View key={`${event.id}-${event.updatedAt?.seconds || event.updatedAt || index}`} style={{ marginBottom: index === events.length - 1 ? verticalScale(16) : 0 }}>
+                      {renderEvent({ item: event })}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyEventsContainer}>
+                  <Text style={styles.emptyEventsText}>No events this period</Text>
+                  <Text style={styles.emptyEventsSubtext}>Tap the + button to add events</Text>
+                </View>
+              )}
             </View>
-          ) : (
-            <View style={styles.emptyEventsContainer}>
-              <Text style={styles.emptyEventsText}>No events this period</Text>
-              <Text style={styles.emptyEventsSubtext}>Tap the + button to add events</Text>
+          </View>
+        </ScrollView>
+
+        {/* Add Event Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={modalVisible}
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalContainer}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                Add Event for {selectedDate ? selectedDate.toDateString() : ''}
+              </Text>
+              <TextInput
+                style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
+                placeholder="Event title"
+                value={eventTitle}
+                onChangeText={setEventTitle}
+                autoFocus={true}
+                editable={!addingEvent}
+              />
+
+              {/* Emoji Selection */}
+              <View style={styles.emojiSelectionContainer}>
+                <Text style={styles.emojiSelectionTitle}>Choose an Emoji:</Text>
+                <ScrollView
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.emojiScrollView}
+                  contentContainerStyle={styles.emojiScrollContent}
+                  horizontal={true}
+                >
+                  <View style={styles.emojiRowContainer}>
+                    <View style={styles.emojiRow}>
+                      {row1Emojis.map((emoji, index) => (
+                        <TouchableOpacity
+                          key={`row1-${emoji}-${index}`}
+                          style={[
+                            styles.emojiOption,
+                            selectedEmoji === emoji && styles.selectedEmoji
+                          ]}
+                          onPress={() => setSelectedEmoji(emoji)}
+                        >
+                          <Text style={styles.emojiOptionText}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <View style={styles.emojiRow}>
+                      {row2Emojis.map((emoji, index) => (
+                        <TouchableOpacity
+                          key={`row2-${emoji}-${index}`}
+                          style={[
+                            styles.emojiOption,
+                            selectedEmoji === emoji && styles.selectedEmoji
+                          ]}
+                          onPress={() => setSelectedEmoji(emoji)}
+                        >
+                          <Text style={styles.emojiOptionText}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Time Selection */}
+              <View style={styles.timeSelectionContainer}>
+                <Text style={styles.timeSelectionTitle}>Select Time:</Text>
+                <View style={styles.timePickerHeaders}>
+                  <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>From:</Text>
+                  <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>To:</Text>
+                </View>
+                <View style={styles.timePickerLayout}>
+                  <View style={styles.timePickerGroup}>
+                    {renderTimePicker(getDayHours(), startHour, handleStartHourChange)}
+                    <Text style={styles.timePickerSeparator}>:</Text>
+                    {renderTimePicker(getMinutes(), startMinute, handleStartMinuteChange)}
+                  </View>
+                  <View style={styles.timePickerGroup}>
+                    {renderTimePicker(getDayHours(), endHour, handleEndHourChange)}
+                    <Text style={styles.timePickerSeparator}>:</Text>
+                    {renderTimePicker(getMinutes(), endMinute, handleEndMinuteChange)}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[globalStyles.button, globalStyles.outlineButton, styles.modalButton]}
+                  onPress={() => setModalVisible(false)}
+                  disabled={addingEvent}
+                >
+                  <Text style={[globalStyles.buttonText, globalStyles.outlineButtonText]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[globalStyles.button, styles.modalButton, addingEvent && globalStyles.disabledButton, { backgroundColor: getButtonColor(themePalette.primary) }]}
+                  onPress={handleCreateEvent}
+                  disabled={!eventTitle.trim() || addingEvent}
+                >
+                  {addingEvent ? (
+                    <ActivityIndicator color={colors.textLight} size="small" />
+                  ) : (
+                    <Text style={globalStyles.buttonText}>Add Event</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
-        </View>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        {/* Edit Event Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={editModalVisible}
+          onRequestClose={() => setEditModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalContainer}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                Edit Event
+              </Text>
+              <TextInput
+                style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
+                placeholder="Event title"
+                value={editEventTitle}
+                onChangeText={setEditEventTitle}
+                autoFocus={true}
+              />
+
+              {/* Emoji Selection */}
+              <View style={styles.emojiSelectionContainer}>
+                <Text style={styles.emojiSelectionTitle}>Choose an Emoji:</Text>
+                <ScrollView
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.emojiScrollView}
+                  contentContainerStyle={styles.emojiScrollContent}
+                  horizontal={true}
+                >
+                  <View style={styles.emojiRowContainer}>
+                    <View style={styles.emojiRow}>
+                      {row1Emojis.map((emoji, index) => (
+                        <TouchableOpacity
+                          key={`edit-row1-${emoji}-${index}`}
+                          style={[
+                            styles.emojiOption,
+                            editEventEmoji === emoji && styles.selectedEmoji
+                          ]}
+                          onPress={() => setEditEventEmoji(emoji)}
+                        >
+                          <Text style={styles.emojiOptionText}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <View style={styles.emojiRow}>
+                      {row2Emojis.map((emoji, index) => (
+                        <TouchableOpacity
+                          key={`edit-row2-${emoji}-${index}`}
+                          style={[
+                            styles.emojiOption,
+                            editEventEmoji === emoji && styles.selectedEmoji
+                          ]}
+                          onPress={() => setEditEventEmoji(emoji)}
+                        >
+                          <Text style={styles.emojiOptionText}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Time Selection */}
+              <View style={styles.timeSelectionContainer}>
+                <Text style={styles.timeSelectionTitle}>Select Time:</Text>
+                <View style={styles.timePickerHeaders}>
+                  <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>From:</Text>
+                  <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>To:</Text>
+                </View>
+                <View style={styles.timePickerLayout}>
+                  <View style={styles.timePickerGroup}>
+                    {renderTimePicker(getDayHours(), editStartHour, (value) => setEditStartHour(value))}
+                    <Text style={styles.timePickerSeparator}>:</Text>
+                    {renderTimePicker(getMinutes(), editStartMinute, (value) => setEditStartMinute(value))}
+                  </View>
+                  <View style={styles.timePickerGroup}>
+                    {renderTimePicker(getDayHours(), editEndHour, (value) => setEditEndHour(value))}
+                    <Text style={styles.timePickerSeparator}>:</Text>
+                    {renderTimePicker(getMinutes(), editEndMinute, (value) => setEditEndMinute(value))}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[globalStyles.button, globalStyles.outlineButton, styles.modalButton]}
+                  onPress={() => setEditModalVisible(false)}
+                >
+                  <Text style={[globalStyles.buttonText, globalStyles.outlineButtonText]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[globalStyles.button, styles.modalButton, { backgroundColor: getButtonColor(themePalette.primary) }]}
+                  onPress={handleUpdateEvent}
+                >
+                  <Text style={globalStyles.buttonText}>Update Event</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
-      </ScrollView>
-
-      {/* Add Event Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalContainer}
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              Add Event for {selectedDate ? selectedDate.toDateString() : ''}
-            </Text>
-            <TextInput
-              style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
-              placeholder="Event title"
-              value={eventTitle}
-              onChangeText={setEventTitle}
-              autoFocus={true}
-              editable={!addingEvent}
-            />
-
-            {/* Emoji Selection */}
-            <View style={styles.emojiSelectionContainer}>
-              <Text style={styles.emojiSelectionTitle}>Choose an Emoji:</Text>
-              <ScrollView
-                showsHorizontalScrollIndicator={false}
-                style={styles.emojiScrollView}
-                contentContainerStyle={styles.emojiScrollContent}
-                horizontal={true}
-              >
-                <View style={styles.emojiRowContainer}>
-                  <View style={styles.emojiRow}>
-                    {[
-                      // Row 1 - Events, Activities, Objects
-                      '🎯', '🎉', '🥳', '🎊', '🎂', '🎁', '🎈', '🎆', '🎇', '🧨',
-                      '✨', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎬', '🎭', '🎨',
-                      '🎪', '🎫', '🎟️', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
-                      '🎤', '🎧', '🎮', '🎲', '♟️', '⚽', '🏀', '🏈', '⚾', '🎾',
-                      '🏐', '🏉', '🎱', '🪀', '🏓', '🏸', '🥅', '⛳', '🪁', '🏹',
-                      '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '⛸️', '🥌', '🎿',
-                      '⛷️', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️',
-                      '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆'
-                    ].map((emoji, index) => (
-                      <TouchableOpacity
-                        key={`row1-${emoji}-${index}`}
-                        style={[
-                          styles.emojiOption,
-                          selectedEmoji === emoji && styles.selectedEmoji
-                        ]}
-                        onPress={() => setSelectedEmoji(emoji)}
-                      >
-                        <Text style={styles.emojiOptionText}>{emoji}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <View style={styles.emojiRow}>
-                    {[
-                      // Row 2 - Food, Nature, Faces, Hearts
-                      '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒',
-                      '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬',
-                      '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐',
-                      '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇',
-                      '🥓', '🥩', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪',
-                      '🥗', '🍿', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍮', '🎂',
-                      '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
-                      '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚'
-                    ].map((emoji, index) => (
-                      <TouchableOpacity
-                        key={`row2-${emoji}-${index}`}
-                        style={[
-                          styles.emojiOption,
-                          selectedEmoji === emoji && styles.selectedEmoji
-                        ]}
-                        onPress={() => setSelectedEmoji(emoji)}
-                      >
-                        <Text style={styles.emojiOptionText}>{emoji}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </ScrollView>
-            </View>
-
-            {/* Time Selection */}
-            <View style={styles.timeSelectionContainer}>
-              <Text style={styles.timeSelectionTitle}>Select Time:</Text>
-              <View style={styles.timePickerHeaders}>
-                <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>From:</Text>
-                <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>To:</Text>
-              </View>
-              <View style={styles.timePickerLayout}>
-                <View style={styles.timePickerGroup}>
-                  {renderTimePicker(getDayHours(), startHour, handleStartHourChange)}
-                  <Text style={styles.timePickerSeparator}>:</Text>
-                  {renderTimePicker(getMinutes(), startMinute, handleStartMinuteChange)}
-                </View>
-                <View style={styles.timePickerGroup}>
-                  {renderTimePicker(getDayHours(), endHour, handleEndHourChange)}
-                  <Text style={styles.timePickerSeparator}>:</Text>
-                  {renderTimePicker(getMinutes(), endMinute, handleEndMinuteChange)}
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[globalStyles.button, globalStyles.outlineButton, styles.modalButton]}
-                onPress={() => setModalVisible(false)}
-                disabled={addingEvent}
-              >
-                <Text style={[globalStyles.buttonText, globalStyles.outlineButtonText]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[globalStyles.button, styles.modalButton, addingEvent && globalStyles.disabledButton]}
-                onPress={handleCreateEvent}
-                disabled={!eventTitle.trim() || addingEvent}
-              >
-                {addingEvent ? (
-                  <ActivityIndicator color={colors.textLight} size="small" />
-                ) : (
-                  <Text style={globalStyles.buttonText}>Add Event</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-      
-      {/* Edit Event Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={editModalVisible}
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalContainer}
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              Edit Event
-            </Text>
-            <TextInput
-              style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
-              placeholder="Event title"
-              value={editEventTitle}
-              onChangeText={setEditEventTitle}
-              autoFocus={true}
-            />
-
-            {/* Emoji Selection */}
-            <View style={styles.emojiSelectionContainer}>
-              <Text style={styles.emojiSelectionTitle}>Choose an Emoji:</Text>
-              <ScrollView
-                showsHorizontalScrollIndicator={false}
-                style={styles.emojiScrollView}
-                contentContainerStyle={styles.emojiScrollContent}
-                horizontal={true}
-              >
-                <View style={styles.emojiRowContainer}>
-                  <View style={styles.emojiRow}>
-                    {[
-                      // Row 1 - Events, Activities, Objects
-                      '🎯', '🎉', '🥳', '🎊', '🎂', '🎁', '🎈', '🎆', '🎇', '🧨',
-                      '✨', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎬', '🎭', '🎨',
-                      '🎪', '🎫', '🎟️', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
-                      '🎤', '🎧', '🎮', '🎲', '♟️', '⚽', '🏀', '🏈', '⚾', '🎾',
-                      '🏐', '🏉', '🎱', '🪀', '🏓', '🏸', '🥅', '⛳', '🪁', '🏹',
-                      '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '⛸️', '🥌', '🎿',
-                      '⛷️', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️',
-                      '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆'
-                    ].map((emoji, index) => (
-                      <TouchableOpacity
-                        key={`edit-row1-${emoji}-${index}`}
-                        style={[
-                          styles.emojiOption,
-                          editEventEmoji === emoji && styles.selectedEmoji
-                        ]}
-                        onPress={() => setEditEventEmoji(emoji)}
-                      >
-                        <Text style={styles.emojiOptionText}>{emoji}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <View style={styles.emojiRow}>
-                    {[
-                      // Row 2 - Food, Nature, Faces, Hearts
-                      '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒',
-                      '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬',
-                      '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐',
-                      '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇',
-                      '🥓', '🥩', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪',
-                      '🥗', '🍿', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍮', '🎂',
-                      '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
-                      '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚'
-                    ].map((emoji, index) => (
-                      <TouchableOpacity
-                        key={`edit-row2-${emoji}-${index}`}
-                        style={[
-                          styles.emojiOption,
-                          editEventEmoji === emoji && styles.selectedEmoji
-                        ]}
-                        onPress={() => setEditEventEmoji(emoji)}
-                      >
-                        <Text style={styles.emojiOptionText}>{emoji}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </ScrollView>
-            </View>
-
-            {/* Time Selection */}
-            <View style={styles.timeSelectionContainer}>
-              <Text style={styles.timeSelectionTitle}>Select Time:</Text>
-              <View style={styles.timePickerHeaders}>
-                <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>From:</Text>
-                <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>To:</Text>
-              </View>
-              <View style={styles.timePickerLayout}>
-                <View style={styles.timePickerGroup}>
-                  {renderTimePicker(getDayHours(), editStartHour, (value) => setEditStartHour(value))}
-                  <Text style={styles.timePickerSeparator}>:</Text>
-                  {renderTimePicker(getMinutes(), editStartMinute, (value) => setEditStartMinute(value))}
-                </View>
-                <View style={styles.timePickerGroup}>
-                  {renderTimePicker(getDayHours(), editEndHour, (value) => setEditEndHour(value))}
-                  <Text style={styles.timePickerSeparator}>:</Text>
-                  {renderTimePicker(getMinutes(), editEndMinute, (value) => setEditEndMinute(value))}
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[globalStyles.button, globalStyles.outlineButton, styles.modalButton]}
-                onPress={() => setEditModalVisible(false)}
-              >
-                <Text style={[globalStyles.buttonText, globalStyles.outlineButtonText]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[globalStyles.button, styles.modalButton]}
-                onPress={handleUpdateEvent}
-              >
-                <Text style={globalStyles.buttonText}>Update Event</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -1315,9 +1334,7 @@ const styles = StyleSheet.create({
   },
   headerAddButton: {
     padding: scale(12),
-    backgroundColor: colors.electricBlue,
     borderRadius: moderateScale(16),
-    shadowColor: colors.electricBlue,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -1728,7 +1745,7 @@ const styles = StyleSheet.create({
     marginHorizontal: scale(16),
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: verticalScale(20),
+    marginBottom: verticalScale(10),
     overflow: 'hidden',
     shadowColor: colors.textSecondary,
     shadowOffset: {
