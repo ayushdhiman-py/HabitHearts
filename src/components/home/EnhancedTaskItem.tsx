@@ -335,4 +335,21 @@ const styles = StyleSheet.create({
   },
 });
 
-export default memo(EnhancedTaskItem);
+// Custom memo comparison function to prevent unnecessary re-renders
+const areEqual = (prevProps: EnhancedTaskItemProps, nextProps: EnhancedTaskItemProps) => {
+  return (
+    prevProps.item.id === nextProps.item.id &&
+    prevProps.item.text === nextProps.item.text &&
+    prevProps.item.description === nextProps.item.description &&
+    prevProps.item.completed === nextProps.item.completed &&
+    prevProps.item.emoji === nextProps.item.emoji &&
+    prevProps.item.startTime === nextProps.item.startTime &&
+    prevProps.item.endTime === nextProps.item.endTime &&
+    // Compare due dates properly
+    (prevProps.item.dueDate?.toDate().getTime() === nextProps.item.dueDate?.toDate().getTime()) &&
+    // Compare user objects by uid
+    prevProps.user?.uid === nextProps.user?.uid
+  );
+};
+
+export default memo(EnhancedTaskItem, areEqual);

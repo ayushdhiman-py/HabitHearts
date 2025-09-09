@@ -1,16 +1,16 @@
 import React, { useMemo } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createNativeStackNavigator, type NativeStackNavigationOptions } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 // Lazy load the BottomTabNavigator for better performance
 const BottomTabNavigator = React.lazy(() => import('./BottomTabNavigator'));
 
 // Create a loading component for lazy-loaded screens
-const LazyScreenWrapper = ({ component: Component, ...props }: any) => {
+const LazyBottomTabNavigator = (props: any) => {
   return (
     <React.Suspense fallback={null}>
-      <Component {...props} />
+      <BottomTabNavigator {...props} />
     </React.Suspense>
   );
 };
@@ -21,11 +21,11 @@ const AppNavigator = () => {
   const { user } = useAuth();
 
   // Memoize screen options to prevent unnecessary re-renders
-  const screenOptions = useMemo(() => ({
+  const screenOptions = useMemo<NativeStackNavigationOptions>(() => ({
     headerShown: false,
     contentStyle: { flex: 1 }, // Ensure full height
     // Optimize transitions
-    animation: 'fade',
+    animation: 'fade_from_bottom',
     animationDuration: 200,
   }), []);
 
@@ -35,7 +35,7 @@ const AppNavigator = () => {
         {user ? (
           <Stack.Screen 
             name="Main" 
-            component={(props) => <LazyScreenWrapper component={BottomTabNavigator} {...props} />}
+            component={LazyBottomTabNavigator}
             options={{ 
               contentStyle: { flex: 1 },
               // Optimize tab navigator transitions

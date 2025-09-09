@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { useStatusBar } from '../context/StatusBarContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../theme/colors';
 import { responsiveFontSize, verticalScale } from '../utils/responsive';
+import { type TextStyle } from 'react-native';
 
 // Import screens directly instead of lazy loading to avoid inline function warnings
 import MainHomeScreen from '../screens/MainHomeScreen';
@@ -20,7 +21,7 @@ const BottomTabNavigator = () => {
   const { backgroundColor } = useStatusBar();
 
   // Memoize screen options to prevent unnecessary re-renders
-  const screenOptions = useMemo(() => ({
+  const screenOptions = useMemo<BottomTabNavigationOptions>(() => ({
     tabBarShowLabel: true,
     tabBarStyle: {
       backgroundColor: backgroundColor,
@@ -33,7 +34,7 @@ const BottomTabNavigator = () => {
     tabBarInactiveTintColor: colors.textSecondary,
     tabBarLabelStyle: {
       fontSize: responsiveFontSize(11),
-      fontWeight: '600',
+      fontWeight: '600' as TextStyle['fontWeight'],
       marginBottom: verticalScale(3),
     },
     // Optimize tab bar transitions

@@ -1,11 +1,10 @@
 import React, { useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
 import {
   View,
-  ScrollView,
+  FlatList,
   Dimensions,
   StyleSheet,
-  TouchableOpacity,
-  Text,
+  ViewToken,
 } from 'react-native';
 import colors from '../theme/colors';
 
@@ -24,78 +23,63 @@ export interface SnappingCarouselRef {
 
 const { width: screenWidth } = Dimensions.get('window');
 
-const SnappingCarousel = forwardRef<SnappingCarouselRef, SnappingCarouselProps>(({
-  data,
-  renderItem,
-  onIndexChanged,
-  showNavigation = false,
-  slideWidth = screenWidth, // Default to full screen width
-}, ref) => {
-  const scrollViewRef = useRef<ScrollView>(null);
+const SnappingCarousel = forwardRef<SnappingCarouselRef, SnappingCarouselProps>((
+  {
+    data,
+    renderItem,
+    onIndexChanged,
+    showNavigation = false,
+    slideWidth = screenWidth, // Default to full screen width
+  },
+  ref
+) => {
+  const flatListRef = useRef<FlatList<any>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const isScrollingRef = useRef(false);
 
   useImperativeHandle(ref, () => ({
     scrollToIndex: (index: number) => {
-      if (index >= 0 && index < data.length && scrollViewRef.current) {
-        isScrollingRef.current = true;
-        scrollViewRef.current.scrollTo({
-          x: index * slideWidth,
-          animated: true,
-        });
-        // Update the state immediately
-        setCurrentIndex(index);
-        onIndexChanged?.(index);
-        // Reset scrolling flag after animation
-        setTimeout(() => {
-          isScrollingRef.current = false;
-        }, 300);
+      if (index >= 0 && index < data.length && flatListRef.current) {
+        flatListRef.current.scrollToIndex({ index, animated: true });
       }
     },
     getCurrentIndex: () => currentIndex,
   }));
 
-  const handleScroll = useCallback((event: any) => {
-    if (isScrollingRef.current) {
-      // Skip updates during programmatic scrolling
-      return;
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (viewableItems.length > 0) {
+      const index = viewableItems[0].index;
+      if (index !== null && index !== currentIndex) {
+        setCurrentIndex(index);
+        onIndexChanged?.(index);
+      }
     }
-    
-    const contentOffset = event.nativeEvent.contentOffset;
-    const index = Math.round(contentOffset.x / slideWidth);
-    
-    if (index !== currentIndex && index >= 0 && index < data.length) {
-      setCurrentIndex(index);
-      onIndexChanged?.(index);
-    }
-  }, [currentIndex, data.length, onIndexChanged, slideWidth]);
+  }, [currentIndex, onIndexChanged]);
 
-  const handleScrollEnd = useCallback(() => {
-    isScrollingRef.current = false;
-  }, []);
+  const viewabilityConfig = {
+    itemVisiblePercentThreshold: 50,
+  };
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        ref={scrollViewRef}
+      <FlatList
+        ref={flatListRef}
+        data={data}
+        renderItem={({ item, index }) => (
+          <View style={[styles.slideContainer, { width: slideWidth }]}>
+            {renderItem(item, index)}
+          </View>
+        )}
+        keyExtractor={(item, index) => index.toString()}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        onScrollEndDrag={handleScrollEnd}
-        onMomentumScrollEnd={handleScrollEnd}
-        scrollEventThrottle={16}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         decelerationRate="fast"
         snapToInterval={slideWidth}
-        snapToAlignment="start" // Align to start to prevent cropping
+        snapToAlignment="start"
         contentContainerStyle={styles.contentContainer}
-      >
-        {data.map((item, index) => (
-          <View key={index} style={[styles.slideContainer, { width: slideWidth }]}>
-            {renderItem(item, index)}
-          </View>
-        ))}
-      </ScrollView>
+      />
       
       {showNavigation && (
         <View style={styles.indicatorContainer}>

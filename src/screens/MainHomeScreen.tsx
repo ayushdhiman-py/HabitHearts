@@ -7,10 +7,8 @@ import {
   Modal,
   TouchableOpacity,
   Alert,
-  StatusBar,
   Dimensions,
   TextInput,
-  Pressable,
   BackHandler,
   Platform,
   Animated,
@@ -22,14 +20,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToTasksForUserAndLinked, createTask, updateTask, deleteTask, toggleTaskCompletion, Task } from '../services/taskService';
-import { getLinkedUsers, User as UserServiceUser } from '../services/userService';
-import { subscribeToCalendarEventsForUserAndLinked, CalendarEvent } from '../services/calendarService';
-import { notificationService } from '../services/notificationService';
-import { getGoalsForUserAndLinked, subscribeToGoalsForUserAndLinked } from '../services/goalService';
+import { getLinkedUsers } from '../services/userService';
+import { subscribeToGoalsForUserAndLinked } from '../services/goalService';
 import { getGoalsProgress, updateGoalProgress, GoalProgress } from '../services/goalProgressService';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
-import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
+import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage } from '../utils/responsive';
 import { useStatusBar } from '../context/StatusBarContext';
 import { getTextColorForBackground } from '../utils/colorUtils';
 import { getButtonColor } from '../utils/buttonUtils';
@@ -43,9 +39,7 @@ import { swipeableManager } from '../utils/swipeableManager';
 // Reanimated imports
 import { useFocusEffect } from '@react-navigation/native';
 
-// Conditional import for DateTimePicker
-let DateTimePicker: any = null;
-// We're not using the native picker due to issues, using custom implementation instead
+
 
 // Define types for our components
 interface User {
@@ -58,8 +52,6 @@ interface User {
 
 // Define header height as a constant
 const HEADER_HEIGHT = verticalScale(60);
-
-
 
 // Helper function to get a random bright color for heatmap
 const getRandomBrightColor = () => {
@@ -77,18 +69,617 @@ const getRandomBrightColor = () => {
   };
 
 // Memoize the component to prevent unnecessary re-renders
+const TimePicker = React.memo(({ 
+  items, 
+  selectedValue, 
+  onValueChange 
+}: { 
+  items: number[]; 
+  selectedValue: number; 
+  onValueChange: (value: number) => void; 
+}) => {
+  const itemHeight = 40;
+  const scrollViewRef = useRef<ScrollView>(null);
+  const isScrolling = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scrollY, setScrollY] = useState(0);
+
+  // Scroll to selected item when it changes or on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (scrollViewRef.current) {
+        const index = items.indexOf(selectedValue);
+        if (index !== -1) {
+          // Add padding at top to ensure proper centering (40px for the top padding)
+          const y = index * itemHeight;
+          scrollViewRef.current.scrollTo({ y, animated: false });
+        }
+      }
+    }, 150);
+    
+    return () => {
+      clearTimeout(timer);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [selectedValue, items]);
+
+  const handleScroll = (event: any) => {
+    const y = event.nativeEvent.contentOffset.y;
+    setScrollY(y);
+    
+    if (!isScrolling.current) return;
+    
+    // Adjust for the top padding (40px)
+    const adjustedY = Math.max(0, y);
+    // Calculate index with proper rounding
+    const index = Math.round(adjustedY / itemHeight);
+    // Ensure index is within bounds
+    const clampedIndex = Math.min(Math.max(index, 0), items.length - 1);
+    
+    if (clampedIndex >= 0 && clampedIndex < items.length) {
+      // Clear any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      
+      // Update selection during scroll for visual feedback with a small delay
+      timeoutRef.current = setTimeout(() => {
+        if (items[clampedIndex] !== selectedValue) {
+          onValueChange(items[clampedIndex]);
+        }
+      }, 50);
+    }
+  };
+
+  const handleScrollBeginDrag = () => {
+    isScrolling.current = true;
+    // Clear any pending timeouts
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const handleMomentumScrollEnd = (event: any) => {
+    isScrolling.current = false;
+    
+    // Update scroll position
+    const y = event.nativeEvent.contentOffset.y;
+    setScrollY(y);
+    
+    // Calculate the final position
+    const adjustedY = Math.max(0, y);
+    
+    // Determine the closest item
+    const index = Math.round(adjustedY / itemHeight);
+    const clampedIndex = Math.min(Math.max(index, 0), items.length - 1);
+    
+    if (clampedIndex >= 0 && clampedIndex < items.length) {
+      // Scroll to the exact position to ensure proper alignment
+      const targetY = clampedIndex * itemHeight;
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ y: targetY, animated: true });
+      }
+      
+      // Update the value if it changed
+      if (items[clampedIndex] !== selectedValue) {
+        onValueChange(items[clampedIndex]);
+      }
+    }
+  };
+
+  // Function to determine if an item should have transparent text
+  const isItemTransparent = (index: number) => {
+    // Calculate the position of this item's top edge
+    // Each item is 40px tall, and there's 40px padding at the top
+    const itemTopPosition = (index * itemHeight) + 40;
+    
+    // If the item's top edge is above the scroll position, it's scrolled out
+    return itemTopPosition < scrollY;
+  };
+
+  return (
+    <View style={{
+      height: 120,
+      width: 50,
+      overflow: 'hidden',
+      position: 'relative',
+    }}>
+      {/* Center indicator line */}
+      <View style={{
+        position: 'absolute',
+        top: 40,
+        left: 0,
+        right: 0,
+        height: 40,
+        borderColor: colors.electricBlue,
+        borderWidth: 0,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        zIndex: 1,
+        pointerEvents: 'none',
+      }} />
+      
+      <ScrollView
+        ref={scrollViewRef}
+        showsVerticalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToInterval={itemHeight}
+        onScroll={handleScroll}
+        onScrollBeginDrag={handleScrollBeginDrag}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        scrollEventThrottle={16}
+      >
+        {/* Add padding at the top for the first item to be centered */}
+        <View style={{ height: 40 }} />
+        {items.map((item, index) => (
+          <View 
+            key={index} 
+            style={{
+              height: itemHeight,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{
+              fontSize: 16,
+              color: item === selectedValue ? colors.text : colors.textSecondary,
+              fontWeight: item === selectedValue ? '600' : 'normal',
+              opacity: isItemTransparent(index) ? 0 : 1,
+            }}>
+              {item.toString().padStart(2, '0')}
+            </Text>
+          </View>
+        ))}
+        {/* Add padding at the bottom for the last item to be centered */}
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison function to prevent unnecessary re-renders
+  return (
+    prevProps.selectedValue === nextProps.selectedValue &&
+    prevProps.items.length === nextProps.items.length &&
+    prevProps.items.every((item, index) => item === nextProps.items[index])
+  );
+});
+
+const HeatmapGrid = React.memo(({ 
+  heatmapDays,
+  goalId,
+  goalProgress,
+  streak,
+  lightColor,
+  darkColor,
+  onDatePress
+}: {
+  heatmapDays: any[];
+  goalId: string;
+  goalProgress: GoalProgress[];
+  streak: number;
+  lightColor: string;
+  darkColor: string;
+  onDatePress: (date: Date) => void;
+}) => {
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
+
+  if (!heatmapDays || heatmapDays.length === 0) {
+    return <Text style={styles.noGoalsText}>Loading heatmap...</Text>;
+  }
+
+  return (
+    <View style={styles.heatmapGrid}>
+      {heatmapDays.map((day, index) => {
+        const dateStr = day.date.toISOString().split('T')[0];
+        const progressRecord = goalProgress.find(p => p.date === dateStr);
+
+        // Determine cell color based on progress
+        let cellBackgroundColor = `${lightColor}60`;
+        let cellTextColor = colors.text;
+
+        if (progressRecord) {
+          if (progressRecord.completed) {
+            // Completed day - use dark background color
+            cellBackgroundColor = darkColor;
+            cellTextColor = colors.textLight;
+          } else {
+            // Missed day - use error color
+            cellBackgroundColor = colors.error;
+            cellTextColor = colors.textLight;
+          }
+        } else {
+          // Future or unmarked date
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const checkDate = new Date(day.date);
+          checkDate.setHours(0, 0, 0, 0);
+          
+          if (checkDate > today) {
+            // Future date - lighter background
+            cellBackgroundColor = `${lightColor}40`;
+          } else {
+            // Past unmarked date - default light background
+            cellBackgroundColor = `${lightColor}60`;
+          }
+        }
+
+        // Special handling for today
+        const isTodayDate = isToday(day.date);
+        if (isTodayDate) {
+          cellBackgroundColor = darkColor;
+          cellTextColor = colors.textLight;
+        }
+
+        // Special handling for streak highlight (yellow)
+        const isStreakDay = streak > 0 && (() => {
+          // Logic: if this date is within the streak period counting backwards from today
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const checkDate = new Date(day.date);
+          checkDate.setHours(0, 0, 0, 0);
+          
+          // Only highlight dates that are on or before today
+          if (checkDate > today) {
+            return false;
+          }
+          
+          // Calculate the difference in days
+          const diffTime = today.getTime() - checkDate.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          // Highlight if within the streak period
+          return diffDays < streak;
+        })();
+
+        return (
+          <TouchableOpacity
+            key={`${goalId}-${dateStr}-${index}`}
+            style={[
+              styles.heatmapDateCell,
+              day.isCurrentMonth ? styles.currentMonthCell : styles.otherMonthCell,
+              isTodayDate && styles.todayDateCell,
+              {
+                backgroundColor: isStreakDay ? colors.streakHighlight : cellBackgroundColor,
+                borderColor: isStreakDay ? colors.streakHighlight : darkColor,
+              }
+            ]}
+            onPress={() => onDatePress(day.date)}
+            disabled={!day.isCurrentMonth}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.heatmapDateText,
+              day.isCurrentMonth ? styles.currentMonthDateText : styles.otherMonthDateText,
+              isTodayDate && styles.todayDateText,
+              { 
+                color: isStreakDay ? colors.text : cellTextColor 
+              }
+            ]}>
+              {day.day}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+});
+
+const HeatmapItem = React.memo(({ 
+  goal, 
+  goalId, 
+  lightColor, 
+  darkColor, 
+  goalProgress,
+  onUpdateProgress,
+  user,
+  heatmapDays
+}: {
+  goal: any;
+  goalId: string;
+  lightColor: string;
+  darkColor: string;
+  goalProgress: GoalProgress[];
+  onUpdateProgress: (goalId: string, newProgress: GoalProgress[]) => void;
+  user: User | null;
+  heatmapDays: any[];
+}) => {
+  const [streak, setStreak] = useState(0);
+  const [completionPercentage, setCompletionPercentage] = useState(0);
+  const [daysInMonth, setDaysInMonth] = useState(0);
+  const [isGridVisible, setIsGridVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsGridVisible(true);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Calculate streak for this specific goal
+  useEffect(() => {
+    const calculateGoalStreak = () => {
+      let streakCount = 0;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Count consecutive completed days backwards from today
+      let currentDate = new Date(today);
+      while (true) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const progressRecord = goalProgress.find(p => p.date === dateStr);
+
+        if (progressRecord && progressRecord.completed) {
+          streakCount++;
+          // Move to previous day
+          currentDate.setDate(currentDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+
+      return streakCount;
+    };
+
+    setStreak(calculateGoalStreak());
+  }, [goalProgress]);
+
+  // Calculate completion percentage
+  useEffect(() => {
+    const getDaysInMonth = () => {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    };
+
+    const calculateCompletionPercentage = () => {
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      // Get the number of days in the current month
+      const totalDaysInMonth = getDaysInMonth();
+
+      // Count completed days in the current month
+      let completedDays = 0;
+      for (let day = 1; day <= totalDaysInMonth; day++) {
+        const date = new Date(currentYear, currentMonth, day);
+        const dateStr = date.toISOString().split('T')[0];
+        const progressRecord = goalProgress.find(p => p.date === dateStr);
+
+        if (progressRecord && progressRecord.completed) {
+          completedDays++;
+        }
+      }
+
+      // Calculate percentage based on total days in month
+      return Math.round((completedDays / totalDaysInMonth) * 100);
+    };
+
+    const totalDays = getDaysInMonth();
+    const percentage = calculateCompletionPercentage();
+    
+    setDaysInMonth(totalDays);
+    setCompletionPercentage(percentage);
+  }, [goalProgress]);
+
+  // Handle date press - would show options to mark as done or not
+  const handleDatePress = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+
+    // Only allow marking for today or past dates
+    if (checkDate <= today && user) {
+      Alert.alert(
+        `Mark ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        'Did you complete this goal on this day?',
+        [
+          {
+            text: 'No',
+            onPress: async () => {
+              // Mark as missed
+              try {
+                const progress: GoalProgress = await updateGoalProgress(goalId, date, false, user.uid);
+                // Update local state with a new object reference to trigger re-render
+                const existingProgress = goalProgress || [];
+                // Filter out any existing record for this date
+                const filteredProgress = existingProgress.filter(p => p.date !== progress.date);
+                // Add the new/updated record
+                const newProgress = [...filteredProgress, progress];
+                onUpdateProgress(goalId, newProgress);
+              } catch (error) {
+                console.error('Error marking goal as missed:', error);
+              }
+            }
+          },
+          {
+            text: 'Yes',
+            onPress: async () => {
+              // Mark as completed
+              try {
+                const progress: GoalProgress = await updateGoalProgress(goalId, date, true, user.uid);
+                // Update local state with a new object reference to trigger re-render
+                const existingProgress = goalProgress || [];
+                // Filter out any existing record for this date
+                const filteredProgress = existingProgress.filter(p => p.date !== progress.date);
+                // Add the new/updated record
+                const newProgress = [...filteredProgress, progress];
+                onUpdateProgress(goalId, newProgress);
+              } catch (error) {
+                console.error('Error marking goal as completed:', error);
+              }
+            }
+          }
+        ]
+      );
+    }
+  };
+
+  return (
+    <View key={goal.id} style={styles.goalHeatmapContainer}>
+      <View style={[styles.goalHeatmap, { backgroundColor: lightColor }]}>
+        <View style={styles.goalHeader}>
+          <Text style={[styles.goalName, { color: darkColor }]} numberOfLines={1}>
+            {goal.text}
+          </Text>
+          <View style={styles.streakContainer}>
+            <Icon name="local-fire-department" size={responsiveFontSize(16)} color={colors.streakHighlight} />
+            <Text style={styles.streakText}>{streak} days</Text>
+          </View>
+        </View>
+        <View style={styles.progressContainer}>
+          <Text style={[styles.progressText, { color: darkColor }]}>{Math.round((completionPercentage / 100) * daysInMonth)} of {daysInMonth} days completed</Text>
+          <View style={styles.progressBarContainer}>
+            <View style={[styles.progressBar, { 
+              backgroundColor: darkColor,
+              width: `${completionPercentage}%` 
+            }]} />
+          </View>
+        </View>
+        <TouchableOpacity
+          style={[styles.dailyCheckButton, { 
+            backgroundColor: `${darkColor}33`, // Glass effect
+            borderColor: darkColor,
+            borderWidth: 1
+          }]}
+          onPress={() => {
+            if (user) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0); // Normalize the time
+              today.setMilliseconds(0); // Ensure milliseconds are zero
+              
+              // Mark today as completed for this goal directly
+              Alert.alert(
+                'Mark Completed',
+                `Did you complete "${goal.text}" today?`,
+                [
+                  {
+                    text: 'Cancel',
+                    style: 'cancel'
+                  },
+                  {
+                    text: 'No',
+                    onPress: async () => {
+                      // Mark today as missed for this goal
+                      try {
+                        const progress: GoalProgress = await updateGoalProgress(goalId, today, false, user.uid);
+                        // Update local state with a new object reference to trigger re-render
+                        const existingProgress = goalProgress || [];
+                        // Filter out any existing record for this date
+                        const filteredProgress = existingProgress.filter(p => p.date !== progress.date);
+                        // Add the new/updated record
+                        const newProgress = [...filteredProgress, progress];
+                        onUpdateProgress(goalId, newProgress);
+                      } catch (error) {
+                        console.error('Error marking goal as missed:', error);
+                        Alert.alert('Error', 'Failed to mark goal as missed. Please try again.');
+                      }
+                    }
+                  },
+                  {
+                    text: 'Yes',
+                    onPress: async () => {
+                      // Mark today as completed for this goal
+                      try {
+                        const progress: GoalProgress = await updateGoalProgress(goalId, today, true, user.uid);
+                        // Update local state with a new object reference to trigger re-render
+                        const existingProgress = goalProgress || [];
+                        // Filter out any existing record for this date
+                        const filteredProgress = existingProgress.filter(p => p.date !== progress.date);
+                        // Add the new/updated record
+                        const newProgress = [...filteredProgress, progress];
+                        onUpdateProgress(goalId, newProgress);
+                      } catch (error) {
+                        console.error('Error marking goal as completed:', error);
+                        Alert.alert('Error', 'Failed to mark goal as completed. Please try again.');
+                      }
+                    }
+                  }
+                ]
+              );
+            }
+          }}
+        >
+          <Icon name="check-circle" size={responsiveFontSize(16)} color={darkColor} />
+          <Text style={[styles.dailyCheckButtonText, { color: darkColor }]}>Done Today</Text>
+        </TouchableOpacity>
+        <View style={[styles.heatmapCalendar, { backgroundColor: `${lightColor}80` }]}>
+          {/* Days of week header */}
+          <View style={[styles.heatmapWeekDays, { backgroundColor: darkColor }]}>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+              <Text key={index} style={[styles.heatmapWeekDayText, { color: colors.textLight }]}>
+                {day}
+              </Text>
+            ))}
+          </View>
+          {isGridVisible ? (
+            <HeatmapGrid
+              heatmapDays={heatmapDays}
+              goalId={goalId}
+              goalProgress={goalProgress}
+              streak={streak}
+              lightColor={lightColor}
+              darkColor={darkColor}
+              onDatePress={handleDatePress}
+            />
+          ) : (
+            <View style={styles.heatmapGrid}>
+              <ActivityIndicator color={darkColor} />
+            </View>
+          )}
+        </View>
+        {/* Heatmap Legend */}
+        <View style={styles.heatmapLegend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColorBox, { backgroundColor: darkColor }]} />
+            <Text style={styles.legendText}>Completed</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColorBox, styles.legendMissed]} />
+            <Text style={styles.legendText}>Missed</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColorBox, styles.legendDefault]} />
+            <Text style={styles.legendText}>Not Marked</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison function to prevent unnecessary re-renders
+  return (
+    prevProps.goal.id === nextProps.goal.id &&
+    prevProps.goal.text === nextProps.goal.text &&
+    prevProps.lightColor === nextProps.lightColor &&
+    prevProps.darkColor === nextProps.darkColor &&
+    prevProps.goalProgress.length === nextProps.goalProgress.length &&
+    prevProps.goalProgress.every((progress, index) => 
+      progress.date === nextProps.goalProgress[index].date &&
+      progress.completed === nextProps.goalProgress[index].completed
+    ) &&
+    prevProps.user?.uid === nextProps.user?.uid &&
+    prevProps.heatmapDays.length === nextProps.heatmapDays.length
+  );
+});
+
 const MainHomeScreen = () => {
-  const { user } = useAuth() as { user: User | null };
-  const { screenBackgroundColor, backgroundColor, setStatusBar, themePalette } = useStatusBar();
-  const [task, setTask] = useState('');
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
-  const [linkedUserUids, setLinkedUserUids] = useState<string[]>([]);
+  const { user } = useAuth();
+  const { screenBackgroundColor, backgroundColor, themePalette, setStatusBar } = useStatusBar();
   const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [addingTask, setAddingTask] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [weekStartDate, setWeekStartDate] = useState(() => {
+    // Not used in the new approach but kept for compatibility
     const today = new Date();
     const day = today.getDay();
     const startDate = new Date(today);
@@ -97,48 +688,36 @@ const MainHomeScreen = () => {
     return startDate;
   });
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [editTaskTitle, setEditTaskTitle] = useState('');
-  const [editTaskDescription, setEditTaskDescription] = useState('');
-  const [editTaskEmoji, setEditTaskEmoji] = useState('🎯');
-  const [editStartHour, setEditStartHour] = useState(0);
-  const [editStartMinute, setEditStartMinute] = useState(0);
-  const [editEndHour, setEditEndHour] = useState(0);
-  const [editEndMinute, setEditEndMinute] = useState(0);
-  const [isAddTaskModalVisible, setIsAddTaskModalVisible] = useState(false);
-  const [newTaskText, setNewTaskText] = useState('');
-  const [newTaskDescription, setNewTaskDescription] = useState('');
-  const [newTaskDate, setNewTaskDate] = useState(new Date());
-  const [selectedEmoji, setSelectedEmoji] = useState('🎯'); // Default emoji
-  const [startHour, setStartHour] = useState(0); // Default start hour (0-23)
-  const [startMinute, setStartMinute] = useState(0); // Default start minute (0,15,30,45)
-  const [endHour, setEndHour] = useState(0); // Default end hour (0-23)
-  const [endMinute, setEndMinute] = useState(0); // Default end minute (0,15,30,45)
+  const [isTaskModalVisible, setIsTaskModalVisible] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [taskDate, setTaskDate] = useState(new Date());
+  const [taskEmoji, setTaskEmoji] = useState('🎯');
+  const [taskStartHour, setTaskStartHour] = useState(0);
+  const [taskStartMinute, setTaskStartMinute] = useState(0);
+  const [taskEndHour, setTaskEndHour] = useState(0);
+  const [taskEndMinute, setTaskEndMinute] = useState(0);
+
   // For task detail modal date/time picker
   const [showTaskDetailDatePicker, setShowTaskDetailDatePicker] = useState(false);
   const [showTaskDetailTimePicker, setShowTaskDetailTimePicker] = useState(false);
-  const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
-  const [datePickerMode, setDatePickerMode] = useState<'date' | 'time'>('date');
   const [goals, setGoals] = useState<any[]>([]);
   const [goalsProgress, setGoalsProgress] = useState<Record<string, GoalProgress[]>>({});
   const [heatmapColors, setHeatmapColors] = useState<Record<string, {light: string, dark: string}>>({});
   // For date/time selection in modals
   const [tempSelectedDate, setTempSelectedDate] = useState(new Date());
-  const tasksUnsubscribeRef = useRef<(() => void) | null>(null);
-  const goalsUnsubscribeRef = useRef<(() => void) | null>(null);
-  const eventsUnsubscribeRef = useRef<(() => void) | null>(null);
   const heatmapDaysRef = useRef<any[]>([]);
   const heatmapCarouselRef = useRef<SnappingCarouselRef>(null);
   const monthScrollViewRef = useRef<ScrollView>(null);
   const [isReturningToToday, setIsReturningToToday] = useState(false);
   const runnerAnimation = useRef(new Animated.Value(0)).current;
   const todayPulseAnimation = useRef(new Animated.Value(1)).current;
-  const buttonPressAnimation = useRef(new Animated.Value(1)).current;
 
   useFocusEffect(
     useCallback(() => {
-      // Set status bar to match the app's primary theme
+      // Set status bar to match the app's primary theme (only when needed)
       setStatusBar(themePalette.statusBar, 'light-content');
-    }, [setStatusBar, themePalette.statusBar])
+    }, [themePalette.statusBar])
   );
 
   // For animated header
@@ -157,15 +736,13 @@ const MainHomeScreen = () => {
     extrapolate: 'clamp',
   });
 
-  // For heatmap cell animations
-  const scaleValue = useRef(new Animated.Value(1)).current;
+  
 
   const fetchLinkedUsers = useCallback(async () => {
-    if (user) {
+    if (user?.uid) {
       try {
-        const linkedUsers = await getLinkedUsers(user?.uid);
+        const linkedUsers = await getLinkedUsers(user.uid);
         const linkedUids = linkedUsers.map(u => u.uid);
-        setLinkedUserUids(linkedUids);
         return linkedUids;
       } catch (error) {
         console.error('Error fetching linked users:', error);
@@ -173,29 +750,36 @@ const MainHomeScreen = () => {
       }
     }
     return [];
-  }, [user]);
+  }, [user?.uid]);
 
-  // Initialize heatmap days and refresh when goals change
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
+
+  // Initialize heatmap days only once when component mounts
   useEffect(() => {
-    console.log('Initializing heatmap days...');
     if (!heatmapDaysRef.current || heatmapDaysRef.current.length === 0) {
-      console.log('Heatmap days not initialized, generating...');
       const newDays = generateCalendarDaysForHeatmap();
       heatmapDaysRef.current = newDays;
-      console.log('Heatmap days initialized:', newDays.length);
-    } else {
-      console.log('Heatmap days already initialized:', heatmapDaysRef.current.length);
     }
-    
-    // Generate random colors for each goal heatmap
+  }, []);
+
+  // Generate random colors for each goal heatmap when goals change
+  useEffect(() => {
     const newHeatmapColors: Record<string, {light: string, dark: string}> = {};
+    let hasNewColors = false;
+    
     goals.forEach(goal => {
       if (!heatmapColors[goal.id]) {
         newHeatmapColors[goal.id] = getRandomBrightColor();
+        hasNewColors = true;
       }
     });
     
-    if (Object.keys(newHeatmapColors).length > 0) {
+    if (hasNewColors) {
       setHeatmapColors(prev => ({ ...prev, ...newHeatmapColors }));
     }
   }, [goals]);
@@ -239,44 +823,16 @@ const MainHomeScreen = () => {
   // Scroll to selected day when it changes, positioning it as the 3rd circle
   useEffect(() => {
     const findAndScroll = () => {
-      // Calculate the index of the selected date in our 60-day array
-      const startDate = new Date(weekStartDate);
-      startDate.setHours(0, 0, 0, 0);
-
-      const targetDate = new Date(selectedDate);
-      targetDate.setHours(0, 0, 0, 0);
-
-      const timeDiff = targetDate.getTime() - startDate.getTime();
-      const dayDiff = Math.round(timeDiff / (1000 * 3600 * 24));
-
-      // Check if the selected date is within our 60-day range
-      if (dayDiff >= 0 && dayDiff < 60) {
-        if (dayDiff < 2) {
-          // Selected date is too close to the start of the list.
-          // We need to shift the weekStartDate back to make space.
-          const newWeekStartDate = new Date(weekStartDate);
-          newWeekStartDate.setDate(newWeekStartDate.getDate() - 7);
-          setWeekStartDate(newWeekStartDate);
-          return; // This effect will re-run with the new weekStartDate
-        }
-
-        // For centering, we don't need to subtract 2
-        const scrollIndex = dayDiff;
-        scrollToSelectedDay(scrollIndex);
-        return;
-      }
-
-      // If we are here, the selectedDate is not in the current 60-day view.
-      // We'll reset the weekStartDate to the week of the selectedDate.
-      const newWeekStartDate = getStartOfWeek(selectedDate);
-      setWeekStartDate(newWeekStartDate);
+      // With the new approach, we always center on the selected date
+      // So we just need to scroll to the middle of the view (index 15 for 30 items)
+      scrollToSelectedDay(15);
     };
 
     // Only run the scroll positioning after interactions to avoid blocking the UI
     InteractionManager.runAfterInteractions(() => {
       findAndScroll();
     });
-  }, [selectedDate, weekStartDate]);
+  }, [selectedDate]);
 
   // Handle hardware back button
   useEffect(() => {
@@ -291,132 +847,156 @@ const MainHomeScreen = () => {
       } else if (selectedTask) {
         setSelectedTask(null);
         return true; // Prevent default back behavior
-      } else if (isAddTaskModalVisible) {
-        setIsAddTaskModalVisible(false);
+      } else if (isTaskModalVisible) {
+        setIsTaskModalVisible(false);
         return true; // Prevent default back behavior
       }
       return false; // Use default back behavior
     });
 
     return () => backHandler.remove();
-  }, [selectedTask, isAddTaskModalVisible, showTaskDetailDatePicker, showTaskDetailTimePicker]);
+  }, [selectedTask, isTaskModalVisible, showTaskDetailDatePicker, showTaskDetailTimePicker]);
 
   // Scroll to today's date when component mounts
   useEffect(() => {
     const scrollToToday = () => {
-      const today = new Date();
-      const startDate = new Date(weekStartDate);
-      startDate.setHours(0, 0, 0, 0);
-
-      const timeDiff = today.getTime() - startDate.getTime();
-      const dayDiff = Math.round(timeDiff / (1000 * 3600 * 24));
-
-      // Check if today is within our 60-day range
-      if (dayDiff >= 0 && dayDiff < 60) {
-        scrollToSelectedDay(dayDiff);
-      }
+      // With the new approach, we always center on the selected date
+      // So we just need to scroll to the middle of the view (index 15 for 30 items)
+      scrollToSelectedDay(15);
     };
 
     // Only run the scroll positioning after interactions to avoid blocking the UI
     InteractionManager.runAfterInteractions(() => {
       scrollToToday();
     });
-  }, [weekStartDate]);
+  }, []);
 
-  // Set up real-time listeners for tasks and goals
+  // Set up real-time listeners once when component mounts
   useEffect(() => {
-    let isMounted = true;
+    let tasksUnsubscribe: (() => void) | null = null;
+    let goalsUnsubscribe: (() => void) | null = null;
+    let setupTimer: ReturnType<typeof setTimeout> | null = null;
+    let isComponentMounted = true; // Track component mount status
 
     const setupListeners = async () => {
-      if (user) {
+      if (user && isComponentMounted) {
         try {
           const linkedUids = await fetchLinkedUsers();
 
-          // Unsubscribe from previous listeners if they exist
-          if (tasksUnsubscribeRef.current) {
-            tasksUnsubscribeRef.current();
-          }
-          if (goalsUnsubscribeRef.current) {
-            goalsUnsubscribeRef.current();
-          }
-
-          // Set up real-time listener for tasks
-          tasksUnsubscribeRef.current = subscribeToTasksForUserAndLinked(
-            user?.uid,
-            linkedUids,
-            (fetchedTasks) => {
-              if (isMounted) {
-                setTasks(fetchedTasks);
-                if (loading) {
-                  setLoading(false);
-                }
-              }
-            }
-          );
-
-          // Set up real-time listener for goals
-          goalsUnsubscribeRef.current = subscribeToGoalsForUserAndLinked(
-            user?.uid,
-            linkedUids,
-            (fetchedGoals) => {
-              if (isMounted) {
-                setGoals(fetchedGoals);
-
-                // Initialize heatmap colors for new goals
-                setHeatmapColors(prev => {
-                  const newColors: Record<string, {light: string, dark: string}> = {};
-                  fetchedGoals.forEach(goal => {
-                    if (!prev[goal.id]) {
-                      newColors[goal.id] = getRandomBrightColor();
+          // Set up real-time listener for tasks with a small delay
+          setTimeout(() => {
+            if (user && isComponentMounted) {
+              tasksUnsubscribe = subscribeToTasksForUserAndLinked(
+                user.uid,
+                linkedUids,
+                (fetchedTasks) => {
+                  if (isComponentMounted) {
+                    setTasks(fetchedTasks);
+                    if (loading) {
+                      setLoading(false);
                     }
-                  });
-                  return { ...prev, ...newColors };
-                });
+                  }
+                }
+              );
+            }
+          }, 50); // Small delay to allow screen transition to complete
 
-                // Fetch progress data for all goals
-                if (fetchedGoals.length > 0) {
-                  const goalIds = fetchedGoals.map(goal => goal.id);
-                  getGoalsProgress(goalIds, user?.uid).then(progressData => {
-                    // Group progress by goalId
-                    const progressByGoal: Record<string, GoalProgress[]> = {};
-                    progressData.forEach(progress => {
-                      if (!progressByGoal[progress.goalId]) {
-                        progressByGoal[progress.goalId] = [];
-                      }
-                      progressByGoal[progress.goalId].push(progress);
+          // Add a slightly longer delay before setting up goals listener to reduce initial load
+          setTimeout(() => {
+            if (user && isComponentMounted) {
+              // Set up real-time listener for goals
+              goalsUnsubscribe = subscribeToGoalsForUserAndLinked(
+                user.uid,
+                linkedUids,
+                (fetchedGoals) => {
+                  if (isComponentMounted) {
+                    setGoals(fetchedGoals);
+
+                    // Initialize heatmap colors for new goals
+                    setHeatmapColors(prev => {
+                      const newColors: Record<string, {light: string, dark: string}> = {};
+                      fetchedGoals.forEach(goal => {
+                        if (!prev[goal.id]) {
+                          newColors[goal.id] = getRandomBrightColor();
+                        }
+                      });
+                      return { ...prev, ...newColors };
                     });
 
-                    if (isMounted) {
-                      setGoalsProgress(progressByGoal);
+                    // Fetch progress data for all goals with another delay
+                    if (fetchedGoals.length > 0) {
+                      setTimeout(() => {
+                        if (isComponentMounted) {
+                          const goalIds = fetchedGoals.map(goal => goal.id);
+                          // Add caching to prevent unnecessary fetches
+                          getGoalsProgress(goalIds, user.uid).then(progressData => {
+                            if (isComponentMounted) {
+                              // Group progress by goalId
+                              const progressByGoal: Record<string, GoalProgress[]> = {};
+                              progressData.forEach(progress => {
+                                if (!progressByGoal[progress.goalId]) {
+                                  progressByGoal[progress.goalId] = [];
+                                }
+                                progressByGoal[progress.goalId].push(progress);
+                              });
+                              setGoalsProgress(progressByGoal);
+                            }
+                          }).catch(error => {
+                            console.error('Error fetching goals progress:', error);
+                            // Set empty progress data on error to prevent infinite loading
+                            if (isComponentMounted) {
+                              const emptyProgress: Record<string, GoalProgress[]> = {};
+                              fetchedGoals.forEach(goal => {
+                                emptyProgress[goal.id] = [];
+                              });
+                              setGoalsProgress(emptyProgress);
+                            }
+                          });
+                        }
+                      }, 100); // Additional delay for progress data fetching
                     }
-                  }).catch(error => {
-                    console.error('Error fetching goals progress:', error);
-                  });
+                  }
                 }
-              }
+              );
             }
-          );
+          }, 200); // Longer delay to allow tasks to load first
         } catch (error) {
           console.error('Error setting up listeners:', error);
-          if (isMounted) {
+          if (isComponentMounted && loading) {
             setLoading(false);
           }
         }
       }
     };
 
-    setupListeners();
+    // Defer the heavy setup to next frame to allow screen transition to complete
+    setupTimer = setTimeout(() => {
+      setupListeners();
+    }, 100); // Small delay to allow screen transition to complete
+
+    // Add a fallback to ensure loading is set to false even if there are errors
+    const fallbackTimer = setTimeout(() => {
+      if (isComponentMounted && loading) {
+        setLoading(false);
+      }
+    }, 3000); // 3 second fallback
 
     return () => {
-      isMounted = false;
-      if (tasksUnsubscribeRef.current) {
-        tasksUnsubscribeRef.current();
+      isComponentMounted = false; // Mark component as unmounted
+      if (setupTimer) {
+        clearTimeout(setupTimer);
       }
-      if (goalsUnsubscribeRef.current) {
-        goalsUnsubscribeRef.current();
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+      }
+      if (tasksUnsubscribe) {
+        tasksUnsubscribe();
+      }
+      if (goalsUnsubscribe) {
+        goalsUnsubscribe();
       }
     };
-  }, [user, fetchLinkedUsers, loading]);
+  }, [user, loading]); // Removed fetchLinkedUsers from dependencies since it's memoized with useCallback
 
   // Memoize the normalized selected date to avoid recalculating in filter
   const normalizedSelectedDate = useMemo(() => {
@@ -425,12 +1005,9 @@ const MainHomeScreen = () => {
     return date.getTime();
   }, [selectedDate]);
 
-  // Filter tasks based on search query and selected date
-  useEffect(() => {
-    const filtered = tasks.filter(task => {
-      // Check if task matches search query
-      const matchesSearch = task.text.toLowerCase().includes(searchQuery.toLowerCase());
-
+  // Filter tasks based on selected date
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
       // Check if task matches selected date
       let matchesDate = true;
       if (task.dueDate) {
@@ -439,23 +1016,21 @@ const MainHomeScreen = () => {
         matchesDate = taskDate.getTime() === normalizedSelectedDate;
       }
 
-      return matchesSearch && matchesDate;
+      return matchesDate;
     });
-
-    setFilteredTasks(filtered);
-  }, [tasks, searchQuery, normalizedSelectedDate]);
+  }, [tasks, normalizedSelectedDate]);
 
   const addTask = async () => {
-    if (newTaskText.trim() && newTaskDate) {
+    if (taskTitle.trim() && taskDate) {
       setAddingTask(true);
       try {
         // Create a new date object with the selected time
-        const startDate = new Date(newTaskDate);
-        startDate.setHours(startHour, startMinute, 0, 0);
+        const startDate = new Date(taskDate);
+        startDate.setHours(taskStartHour, taskStartMinute, 0, 0);
 
         // Create end date with the end time
-        const endDate = new Date(newTaskDate);
-        endDate.setHours(endHour, endMinute, 0, 0);
+        const endDate = new Date(taskDate);
+        endDate.setHours(taskEndHour, taskEndMinute, 0, 0);
 
         // If end time is before start time, move end date to next day
         if (endDate < startDate) {
@@ -463,14 +1038,14 @@ const MainHomeScreen = () => {
         }
 
         // Format time strings
-        const startTimeString = `${startHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
-        const endTimeString = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+        const startTimeString = `${taskStartHour.toString().padStart(2, '0')}:${taskStartMinute.toString().padStart(2, '0')}`;
+        const endTimeString = `${taskEndHour.toString().padStart(2, '0')}:${taskEndMinute.toString().padStart(2, '0')}`;
 
         // Optimistic update - add task to UI immediately
         const tempTask: Task = {
           id: `temp_${Date.now()}`,
-          text: newTaskText.trim(),
-          description: newTaskDescription,
+          text: taskTitle.trim(),
+          description: taskDescription,
           dueDate: Timestamp.fromDate(startDate),
           completed: false,
           createdBy: user?.uid || '',
@@ -480,25 +1055,18 @@ const MainHomeScreen = () => {
           status: 'active',
           startTime: startTimeString,
           endTime: endTimeString,
-          emoji: selectedEmoji // Include emoji in creation
+          emoji: taskEmoji // Include emoji in creation
         };
 
         setTasks(prevTasks => [...prevTasks, tempTask]);
-        const newTaskTitle = newTaskText.trim();
-        const newTaskEmoji = selectedEmoji; // Capture current emoji
-        setIsAddTaskModalVisible(false);
-        setNewTaskText('');
-        setNewTaskDescription('');
-        setSelectedEmoji('🎯'); // Reset to default
-        setStartHour(0); // Reset to 00
-        setStartMinute(0); // Reset to 00
-        setEndHour(0); // Reset to 00
-        setEndMinute(0); // Reset to 00
+        const newTaskTitle = taskTitle.trim();
+        const newTaskEmoji = taskEmoji; // Capture current emoji
+        setIsTaskModalVisible(false);
 
         // Actually create the task
         await createTask({
           text: newTaskTitle,
-          description: newTaskDescription,
+          description: taskDescription,
           dueDate: Timestamp.fromDate(startDate),
           completed: false,
           createdBy: user?.uid || '',
@@ -520,10 +1088,10 @@ const MainHomeScreen = () => {
     }
   };
 
-  const toggleTask = async (taskItem: Task) => {
+  const toggleTask = useCallback(async (taskItem: Task) => {
     try {
       // Optimistic update
-      setTasks(tasks.map(task =>
+      setTasks(tasks => tasks.map(task =>
         task.id === taskItem.id ? { ...task, completed: !task.completed } : task
       ));
 
@@ -534,17 +1102,17 @@ const MainHomeScreen = () => {
       console.error('Error toggling task:', error);
       Alert.alert('Error', 'Failed to update task. Please try again.');
       // Revert on error
-      setTasks(tasks.map(task =>
+      setTasks(tasks => tasks.map(task =>
         task.id === taskItem.id ? { ...task, completed: taskItem.completed } : task
       ));
     }
-  };
+  }, []);
 
-  const deleteTaskItem = async (taskId: string) => {
+  const deleteTaskItem = useCallback(async (taskId: string) => {
     try {
       // Optimistic update
       const taskToDelete = tasks.find(task => task.id === taskId);
-      setTasks(tasks.filter(task => task.id !== taskId));
+      setTasks(tasks => tasks.filter(task => task.id !== taskId));
 
       // Actually delete the task
       await deleteTask(taskId);
@@ -554,26 +1122,27 @@ const MainHomeScreen = () => {
       Alert.alert('Error', 'Failed to delete task. Please try again.');
       // In a real scenario, the listener would restore the task if deletion failed server-side
     }
-  };
+  }, []);
 
   const openAddTaskModal = () => {
+    setSelectedTask(null);
     const today = new Date();
-    setNewTaskText('');
-    setNewTaskDescription('');
-    setNewTaskDate(today);
-    setSelectedEmoji('🎯'); // Reset to default emoji
-    setStartHour(0); // Reset to 00
-    setStartMinute(0); // Reset to 00
-    setEndHour(0); // Reset to 00
-    setEndMinute(0); // Reset to 00
-    setIsAddTaskModalVisible(true);
+    setTaskTitle('');
+    setTaskDescription('');
+    setTaskDate(today);
+    setTaskEmoji('🎯'); // Reset to default emoji
+    setTaskStartHour(0); // Reset to 00
+    setTaskStartMinute(0); // Reset to 00
+    setTaskEndHour(0); // Reset to 00
+    setTaskEndMinute(0); // Reset to 00
+    setIsTaskModalVisible(true);
     
     // Ensure time pickers reset to 00:00 with a small delay
     setTimeout(() => {
-      setStartHour(0);
-      setStartMinute(0);
-      setEndHour(0);
-      setEndMinute(0);
+      setTaskStartHour(0);
+      setTaskStartMinute(0);
+      setTaskEndHour(0);
+      setTaskEndMinute(0);
     }, 50);
   };
 
@@ -584,20 +1153,20 @@ const MainHomeScreen = () => {
         const finalDueDate = tempSelectedDate;
         
         // Format time strings
-        const startTimeString = `${editStartHour.toString().padStart(2, '0')}:${editStartMinute.toString().padStart(2, '0')}`;
-        const endTimeString = `${editEndHour.toString().padStart(2, '0')}:${editEndMinute.toString().padStart(2, '0')}`;
+        const startTimeString = `${taskStartHour.toString().padStart(2, '0')}:${taskStartMinute.toString().padStart(2, '0')}`;
+        const endTimeString = `${taskEndHour.toString().padStart(2, '0')}:${taskEndMinute.toString().padStart(2, '0')}`;
         
         // Optimistic update
         const updatedTasks = tasks.map(task =>
           task.id === selectedTask.id
             ? { 
                 ...task, 
-                text: editTaskTitle, 
-                description: editTaskDescription,
+                text: taskTitle, 
+                description: taskDescription,
                 dueDate: Timestamp.fromDate(finalDueDate),
                 startTime: startTimeString,
                 endTime: endTimeString,
-                emoji: editTaskEmoji
+                emoji: taskEmoji
               }
             : task
         );
@@ -605,12 +1174,12 @@ const MainHomeScreen = () => {
 
         // Actually update the task
         await updateTask(selectedTask.id, {
-          text: editTaskTitle,
-          description: editTaskDescription,
+          text: taskTitle,
+          description: taskDescription,
           dueDate: Timestamp.fromDate(finalDueDate),
           startTime: startTimeString,
           endTime: endTimeString,
-          emoji: editTaskEmoji
+          emoji: taskEmoji
         });
 
         // Close the modal
@@ -625,180 +1194,61 @@ const MainHomeScreen = () => {
     }
   };
 
-  const isFutureDate = (date: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const checkDate = new Date(date);
-    checkDate.setHours(0, 0, 0, 0);
-    return checkDate > today;
-  };
-
-  const findIndexForDate = (targetDate: Date) => {
-    for (let i = 0; i < 60; i++) {
-      const arrayDay = new Date(weekStartDate);
-      arrayDay.setDate(weekStartDate.getDate() + i);
-      if (arrayDay.toDateString() === targetDate.toDateString()) {
-        return i;
-      }
-    }
-    return -1; // Not found
-  };
-
-  const animateScrollToToday = () => {
-    const today = new Date();
-    const startIndex = findIndexForDate(selectedDate);
-    const endIndex = findIndexForDate(today);
-    const itemWidth = verticalScale(32) + scale(4);
-
-    if (startIndex === -1 || endIndex === -1 || startIndex <= endIndex) {
-      setSelectedDate(today);
-      return;
-    }
-
-    setIsReturningToToday(true);
-    runnerAnimation.setValue(0);
-
-    // Animate the runner emoji
-    Animated.timing(runnerAnimation, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-
-    const duration = 500; // ms
-    const startTime = Date.now();
-
-    const animationLoop = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easedProgress = 1 - Math.pow(1 - progress, 3); // easeOutCubic
-
-      const currentIndex = startIndex - (startIndex - endIndex) * easedProgress;
-
-      const scrollIndex = Math.max(0, currentIndex - 2);
-      const scrollPos = scrollIndex * itemWidth;
-
-      monthScrollViewRef.current?.scrollTo({ x: scrollPos, animated: false });
-
-      if (progress < 1) {
-        requestAnimationFrame(animationLoop);
-      } else {
-        setSelectedDate(today);
-        setIsReturningToToday(false);
-      }
-    };
-
-    requestAnimationFrame(animationLoop);
-  };
-
-  const deleteSelectedTask = () => {
+  const handleSaveTask = async () => {
     if (selectedTask) {
-      Alert.alert(
-        'Delete Task',
-        'Are you sure you want to delete this task?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              deleteTaskItem(selectedTask.id);
-              setSelectedTask(null);
-            }
-          }
-        ]
-      );
+      await saveTaskEdits();
+    } else {
+      await addTask();
     }
+    setIsTaskModalVisible(false);
+    setSelectedTask(null);
   };
 
-  const openTaskDetail = (taskItem: Task) => {
+  const openTaskDetail = useCallback((taskItem: Task) => {
     setSelectedTask(taskItem);
-    setEditTaskTitle(taskItem.text);      
-    setEditTaskDescription(taskItem.description || '');
-    setEditTaskEmoji(taskItem.emoji || '🎯');
+    setTaskTitle(taskItem.text);      
+    setTaskDescription(taskItem.description || '');
+    setTaskEmoji(taskItem.emoji || '🎯');
     
     // Parse start time if it exists
     if (taskItem.startTime) {
       const [hour, minute] = taskItem.startTime.split(':').map(Number);
-      setEditStartHour(hour || 0);
-      setEditStartMinute(minute || 0);
+      setTaskStartHour(hour || 0);
+      setTaskStartMinute(minute || 0);
     } else {
-      setEditStartHour(0);
-      setEditStartMinute(0);
+      setTaskStartHour(0);
+      setTaskStartMinute(0);
     }
     
     // Parse end time if it exists
     if (taskItem.endTime) {
       const [hour, minute] = taskItem.endTime.split(':').map(Number);
-      setEditEndHour(hour || 0);
-      setEditEndMinute(minute || 0);
+      setTaskEndHour(hour || 0);
+      setTaskEndMinute(minute || 0);
     } else {
-      setEditEndHour(0);
-      setEditEndMinute(0);
+      setTaskEndHour(0);
+      setTaskEndMinute(0);
     }
     
     // Initialize tempSelectedDate with the task's due date or current date
-    setTempSelectedDate(taskItem.dueDate?.toDate() || new Date());
-  };
-
-  // Helper function to generate calendar days
-  const getCalendarDays = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-
-    // First day of the month
-    const firstDay = new Date(year, month, 1);
-    // Last day of the month
-    const lastDay = new Date(year, month + 1, 0);
-    // First day of the calendar (Sunday of the week containing the 1st)
-    const startDay = new Date(firstDay);
-    startDay.setDate(firstDay.getDate() - firstDay.getDay());
-    // Last day of the calendar (Saturday of the week containing the last day)
-    const endDay = new Date(lastDay);
-    endDay.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
-
-    const days = [];
-    const currentDay = new Date(startDay);
-
-    while (currentDay <= endDay) {
-      days.push({
-        day: currentDay.getDate(),
-        date: new Date(currentDay),
-        isCurrentMonth: currentDay.getMonth() === month
-      });
-      currentDay.setDate(currentDay.getDate() + 1);
-    }
-
-    return days;
-  };
-
-  // Memoized callbacks for time picker value changes
-  const handleStartHourChange = useCallback((value: number) => {
-    setStartHour(value);
+    const dueDate = taskItem.dueDate?.toDate() || new Date();
+    setTaskDate(dueDate);
+    setTempSelectedDate(dueDate);
+    setIsTaskModalVisible(true);
   }, []);
 
-  const handleStartMinuteChange = useCallback((value: number) => {
-    setStartMinute(value);
-  }, []);
-
-  const handleEndHourChange = useCallback((value: number) => {
-    setEndHour(value);
-  }, []);
-
-  const handleEndMinuteChange = useCallback((value: number) => {
-    setEndMinute(value);
-  }, []);
+  
   
   // Reset time values when modal opens
   useEffect(() => {
-    if (isAddTaskModalVisible) {
-      // Ensure time values are reset to 00:00 when modal opens
-      setStartHour(0);
-      setStartMinute(0);
-      setEndHour(0);
-      setEndMinute(0);
+    if (isTaskModalVisible && !selectedTask) {
+      // Ensure time values are reset to 00:00 when modal opens for adding a task
+      setTaskStartHour(0);
+      setTaskStartMinute(0);
+      setTaskEndHour(0);
+      setTaskEndMinute(0);
     }
-  }, [isAddTaskModalVisible]);
+  }, [isTaskModalVisible, selectedTask]);
 
   // Helper function to generate calendar days for heatmap (shows actual dates)
   const generateCalendarDaysForHeatmap = () => {
@@ -845,185 +1295,6 @@ const MainHomeScreen = () => {
     return [0, 15, 30, 45];
   };
 
-  // TimePicker component - copied from CalendarScreen for exact match
-  const TimePicker = React.memo(({ 
-    items, 
-    selectedValue, 
-    onValueChange 
-  }: { 
-    items: number[]; 
-    selectedValue: number; 
-    onValueChange: (value: number) => void; 
-  }) => {
-    const itemHeight = 40;
-    const scrollViewRef = useRef<ScrollView>(null);
-    const isScrolling = useRef(false);
-    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const [scrollY, setScrollY] = useState(0);
-
-    // Scroll to selected item when it changes or on mount
-    useEffect(() => {
-      const timer = setTimeout(() => {
-        if (scrollViewRef.current) {
-          const index = items.indexOf(selectedValue);
-          if (index !== -1) {
-            // Add padding at top to ensure proper centering (40px for the top padding)
-            const y = index * itemHeight;
-            scrollViewRef.current.scrollTo({ y, animated: false });
-          }
-        }
-      }, 150);
-      
-      return () => {
-        clearTimeout(timer);
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-      };
-    }, [selectedValue, items]);
-
-    const handleScroll = (event: any) => {
-      const y = event.nativeEvent.contentOffset.y;
-      setScrollY(y);
-      
-      if (!isScrolling.current) return;
-      
-      // Adjust for the top padding (40px)
-      const adjustedY = Math.max(0, y);
-      // Calculate index with proper rounding
-      const index = Math.round(adjustedY / itemHeight);
-      // Ensure index is within bounds
-      const clampedIndex = Math.min(Math.max(index, 0), items.length - 1);
-      
-      if (clampedIndex >= 0 && clampedIndex < items.length) {
-        // Clear any existing timeout
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-        
-        // Update selection during scroll for visual feedback with a small delay
-        timeoutRef.current = setTimeout(() => {
-          if (items[clampedIndex] !== selectedValue) {
-            onValueChange(items[clampedIndex]);
-          }
-        }, 50);
-      }
-    };
-
-    const handleScrollBeginDrag = () => {
-      isScrolling.current = true;
-      // Clear any pending timeouts
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-    };
-
-    const handleMomentumScrollEnd = (event: any) => {
-      isScrolling.current = false;
-      
-      // Update scroll position
-      const y = event.nativeEvent.contentOffset.y;
-      setScrollY(y);
-      
-      // Calculate the final position
-      const adjustedY = Math.max(0, y);
-      
-      // Determine the closest item
-      const index = Math.round(adjustedY / itemHeight);
-      const clampedIndex = Math.min(Math.max(index, 0), items.length - 1);
-      
-      if (clampedIndex >= 0 && clampedIndex < items.length) {
-        // Scroll to the exact position to ensure proper alignment
-        const targetY = clampedIndex * itemHeight;
-        if (scrollViewRef.current) {
-          scrollViewRef.current.scrollTo({ y: targetY, animated: true });
-        }
-        
-        // Update the value if it changed
-        if (items[clampedIndex] !== selectedValue) {
-          onValueChange(items[clampedIndex]);
-        }
-      }
-    };
-
-    // Function to determine if an item should have transparent text
-    const isItemTransparent = (index: number) => {
-      // Calculate the position of this item's top edge
-      // Each item is 40px tall, and there's 40px padding at the top
-      const itemTopPosition = (index * itemHeight) + 40;
-      
-      // If the item's top edge is above the scroll position, it's scrolled out
-      return itemTopPosition < scrollY;
-    };
-
-    return (
-      <View style={{
-        height: 120,
-        width: 50,
-        overflow: 'hidden',
-        position: 'relative',
-      }}>
-        {/* Center indicator line */}
-        <View style={{
-          position: 'absolute',
-          top: 40,
-          left: 0,
-          right: 0,
-          height: 40,
-          borderColor: colors.electricBlue,
-          borderWidth: 0,
-          borderTopWidth: 1,
-          borderBottomWidth: 1,
-          zIndex: 1,
-          pointerEvents: 'none',
-        }} />
-        
-        <ScrollView
-          ref={scrollViewRef}
-          showsVerticalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToInterval={itemHeight}
-          onScroll={handleScroll}
-          onScrollBeginDrag={handleScrollBeginDrag}
-          onMomentumScrollEnd={handleMomentumScrollEnd}
-          scrollEventThrottle={16}
-        >
-          {/* Add padding at the top for the first item to be centered */}
-          <View style={{ height: 40 }} />
-          {items.map((item, index) => (
-            <View 
-              key={index} 
-              style={{
-                height: itemHeight,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{
-                fontSize: 16,
-                color: item === selectedValue ? colors.text : colors.textSecondary,
-                fontWeight: item === selectedValue ? '600' : 'normal',
-                opacity: isItemTransparent(index) ? 0 : 1,
-              }}>
-                {item.toString().padStart(2, '0')}
-              </Text>
-            </View>
-          ))}
-          {/* Add padding at the bottom for the last item to be centered */}
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </View>
-    );
-  }, (prevProps, nextProps) => {
-    // Custom comparison function to prevent unnecessary re-renders
-    return (
-      prevProps.selectedValue === nextProps.selectedValue &&
-      prevProps.items.length === nextProps.items.length &&
-      prevProps.items.every((item, index) => item === nextProps.items[index])
-    );
-  });
-
   // Render time picker with proper selection handling
   const renderTimePicker = useCallback((items: number[], selectedValue: number, onValueChange: (value: number) => void) => {
     return (
@@ -1043,651 +1314,354 @@ const MainHomeScreen = () => {
     return startDate;
   };
 
-  const isToday = (date: Date) => {
-    const today = new Date();
-    return date.getDate() === today.getDate() &&
-           date.getMonth() === today.getMonth() &&
-           date.getFullYear() === today.getFullYear();
-  };
+  // Helper function to generate calendar days
+  const getCalendarDays = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
 
-  // Handle date press - would show options to mark as done or not
-  const handleDatePress = (date: Date, goalId: string) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const checkDate = new Date(date);
-    checkDate.setHours(0, 0, 0, 0);
+    // First day of the month
+    const firstDay = new Date(year, month, 1);
+    // Last day of the month
+    const lastDay = new Date(year, month + 1, 0);
+    // First day of the calendar (Sunday of the week containing the 1st)
+    const startDay = new Date(firstDay);
+    startDay.setDate(firstDay.getDate() - firstDay.getDay());
+    // Last day of the calendar (Saturday of the week containing the last day)
+    const endDay = new Date(lastDay);
+    endDay.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
 
-    // Only allow marking for today or past dates
-    if (checkDate <= today && user) {
-      Alert.alert(
-        `Mark ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-        'Did you complete this goal on this day?',
-        [
-          {
-            text: 'No',
-            onPress: async () => {
-              // Mark as missed
-              try {
-                const progress: GoalProgress = await updateGoalProgress(goalId, date, false, user.uid);
-                // Update local state with a new object reference to trigger re-render
-                setGoalsProgress(prev => {
-                  const existingProgress = prev[goalId] || [];
-                  // Filter out any existing record for this date
-                  const filteredProgress = existingProgress.filter(p => p.date !== progress.date);
-                  // Add the new/updated record
-                  const newProgress = [...filteredProgress, progress];
-                  return {
-                    ...prev,
-                    [goalId]: newProgress
-                  };
-                });
-              } catch (error) {
-                console.error('Error marking goal as missed:', error);
-              }
-            }
-          },
-          {
-            text: 'Yes',
-            onPress: async () => {
-              // Mark as completed
-              try {
-                const progress: GoalProgress = await updateGoalProgress(goalId, date, true, user.uid);
-                // Update local state with a new object reference to trigger re-render
-                setGoalsProgress(prev => {
-                  const existingProgress = prev[goalId] || [];
-                  // Filter out any existing record for this date
-                  const filteredProgress = existingProgress.filter(p => p.date !== progress.date);
-                  // Add the new/updated record
-                  const newProgress = [...filteredProgress, progress];
-                  return {
-                    ...prev,
-                    [goalId]: newProgress
-                  };
-                });
-              } catch (error) {
-                console.error('Error marking goal as completed:', error);
-              }
-            }
-          }
-        ]
-      );
+    const days = [];
+    const currentDay = new Date(startDay);
+
+    while (currentDay <= endDay) {
+      days.push({
+        day: currentDay.getDate(),
+        date: new Date(currentDay),
+        isCurrentMonth: currentDay.getMonth() === month
+      });
+      currentDay.setDate(currentDay.getDate() + 1);
     }
-  };
 
-  // Removed skeleton loader - directly render the main content
-  if (loading) {
-    setLoading(false);
-  }
+    return days;
+  };
 
   return ( 
     <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
       <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
-        {/* Animated Header */}
-        <Animated.View
-          style={[
-            styles.headerBar,
-            {
-              transform: [{ translateY: headerTranslateY }],
-              opacity: headerOpacity,
-              backgroundColor: backgroundColor,
-            }
-          ]}
-        >
-          <View style={styles.headerContent}>
-            <Image source={require('../../assets/images/heartlogo.png')} style={styles.headerLogo} />
-            <Text style={[styles.headerText, { color: getTextColorForBackground(backgroundColor) }]}>Habit Hearts</Text>
-            <TouchableOpacity
-              style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary), shadowColor: getButtonColor(themePalette.primary) }]}
-              onPress={openAddTaskModal}
-            >
-              <Icon name="add" size={responsiveFontSize(20)} color={colors.textLight} />
-            </TouchableOpacity>
+        {/* Show loading indicator while initializing */}
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.electricBlue} />
+            <Text style={{ marginTop: verticalScale(10), fontSize: responsiveFontSize(16), color: colors.text }}>
+              Loading your habits...
+            </Text>
           </View>
-        </Animated.View>
+        ) : (
+          <>
+            {/* Animated Header */}
+            <Animated.View
+              style={[
+                styles.headerBar,
+                {
+                  transform: [{ translateY: headerTranslateY }],
+                  opacity: headerOpacity,
+                  backgroundColor: backgroundColor,
+                }
+              ]}
+            >
+              <View style={styles.headerContent}>
+                <Image source={require('../../assets/images/heartlogo.png')} style={styles.headerLogo} />
+                <Text style={[styles.headerText, { color: getTextColorForBackground(backgroundColor) }]}>Habit Hearts</Text>
+                <TouchableOpacity
+                  style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary), shadowColor: getButtonColor(themePalette.primary) }]}
+                  onPress={openAddTaskModal}
+                >
+                  <Icon name="add" size={responsiveFontSize(20)} color={colors.textLight} />
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
 
-        {isReturningToToday && (
-          <Animated.View style={[styles.runnerContainer, {
-            transform: [{
-              translateX: runnerAnimation.interpolate({
-                inputRange: [0, 1],
-                outputRange: [widthPercentage(100), -50] // From right to left
-              })
-            }]
-          }]}>
-            <Text style={styles.runnerEmoji}>🏃</Text>
-          </Animated.View>
-        )}
+            {isReturningToToday && (
+              <Animated.View style={[styles.runnerContainer, {
+                transform: [{
+                  translateX: runnerAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [widthPercentage(100), -50] // From right to left
+                  })
+                }]
+              }]}>
+                <Text style={styles.runnerEmoji}>🏃</Text>
+              </Animated.View>
+            )}
 
-        {/* Scrollable Content */}
-        <Animated.ScrollView
-          style={styles.scrollContainer}
-          contentContainerStyle={styles.scrollContentContainer}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
-          )}
-          scrollEventThrottle={16}
-          onTouchStart={() => {
-            // Close all swipeables when touching the scroll view
-            swipeableManager.closeAll();
-          }}
-        >
-          {/* Scrollable Day Selector with Month Names and Fade Shades */}
-          <View style={styles.weekSelectorContainer}>
-            <View style={styles.daysScrollViewContainer}>
-              {/* Left fade shade */}
-              <View style={styles.leftFade} pointerEvents="none">
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
+            {/* Scrollable Content */}
+            <Animated.ScrollView
+              style={styles.scrollContainer}
+              contentContainerStyle={styles.scrollContentContainer}
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                { useNativeDriver: true }
+              )}
+              scrollEventThrottle={16}
+              onTouchStart={() => {
+                // Close all swipeables when touching the scroll view
+                swipeableManager.closeAll();
+              }}
+            >
+              <View style={styles.weekSelectorContainer}>
+                <View style={styles.daysScrollViewContainer}>
+                  {/* Left fade shade */}
+                  <View style={styles.leftFade} pointerEvents="none">
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
+                  </View>
+
+                  <ScrollView
+                    ref={monthScrollViewRef}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    pagingEnabled={false}
+                    decelerationRate="fast"
+                    snapToInterval={verticalScale(44) + scale(8)} // day circle width + margin
+                    style={styles.weekDaysContainer}
+                    contentContainerStyle={styles.weekDaysContentContainer}
+                  >
+                    {Array.from({ length: 30 }, (_, i) => {
+                      // Render only 30 days instead of 60 for better performance
+                      // Center around the selected date
+                      const centerIndex = 15; // Middle of the 30 days
+                      const day = new Date(selectedDate);
+                      day.setDate(selectedDate.getDate() + (i - centerIndex));
+                      const isSelected = day.toDateString() === selectedDate.toDateString();
+                      const isTodayDate = isToday(day);
+
+                      return (
+                        <View key={`${day.toISOString()}-${i}`} style={styles.dayContainer}>
+                          <Text style={styles.monthIndicator}>
+                            {day.toLocaleDateString('en-US', { month: 'short' })}
+                          </Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.dayCircle,
+                              isSelected && styles.selectedDayCircle,
+                              isTodayDate && styles.todayDayCircle,
+                              {
+                                transform: [
+                                  { scale: isTodayDate ? todayPulseAnimation : 1 }
+                                ]
+                              }
+                            ]}
+                            onPress={() => {
+                              setSelectedDate(day);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[
+                              styles.dayName,
+                              isSelected && styles.selectedDayText,
+                              isTodayDate && styles.todayDayText
+                            ]}>
+                              {day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}
+                            </Text>
+                            <View style={[
+                              styles.dayInnerCircle,
+                              isSelected && styles.selectedDayInnerCircle,
+                              isTodayDate && styles.todayDayInnerCircle
+                            ]}>
+                              <Text style={[
+                                styles.dayNumber,
+                                isSelected && styles.selectedDayNumber,
+                                isTodayDate && styles.todayDayNumber
+                              ]}>
+                                {day.getDate()}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {/* Right fade shade */}
+                  <View style={styles.rightFade} pointerEvents="none">
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
+                  </View>
+                </View>
               </View>
 
-              <ScrollView
-                ref={monthScrollViewRef}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                pagingEnabled={false}
-                decelerationRate="fast"
-                snapToInterval={verticalScale(44) + scale(8)} // day circle width + margin
-                style={styles.weekDaysContainer}
-                contentContainerStyle={styles.weekDaysContentContainer}
-              >
-                {/* Generate 60 days (about 2 months) for scrolling */}
-                {useMemo(() => Array.from({ length: 60 }, (_, i) => {
-                  const day = new Date(weekStartDate);
-                  day.setDate(weekStartDate.getDate() + i);
-                  const isSelected = day.toDateString() === selectedDate.toDateString();
-                  const isTodayDate = isToday(day);
+              {/* Today Button */}
+              <View style={{
+                flexDirection: 'row',
+                alignSelf: 'center',
+                alignItems: 'center',
+                paddingHorizontal: scale(16),
+                backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                borderRadius: moderateScale(24),
+                marginBottom: verticalScale(20),
+                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 0.8)',
+              }}>
+                <Icon name="favorite" size={responsiveFontSize(18)} color={colors.hotPink} />
+                <Text style={[styles.hiText, { marginLeft: scale(8) }]}>Hi, {user?.name || 'User'}, </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const today = new Date();
+                    setSelectedDate(today);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={[styles.hiText, { textDecorationLine: 'none', fontWeight: '800' }]}>
+                    today is 
+                  </Text>
+                  <Text style={[styles.hiText, { 
+                    textDecorationLine: 'underline', 
+                    marginLeft: scale(6),
+                    fontWeight: '900'
+                  }]}>
+                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  </Text>
+                  <Icon name="calendar-today" size={responsiveFontSize(16)} color={colors.electricBlue} style={{ marginLeft: scale(6) }} />
+                </TouchableOpacity>
+              </View>
 
-                  return (
-                    <View key={`${day.toISOString()}-${i}`} style={styles.dayContainer}>
-                      <Text style={styles.monthIndicator}>
-                        {day.toLocaleDateString('en-US', { month: 'short' })}
-                      </Text>
+              {/* Task List */}
+              <View style={styles.taskListContainer}>
+                {filteredTasks
+                  .slice()
+                  .sort((a, b) => {
+                    // First sort by completion status (incomplete tasks first)
+                    if (a.completed !== b.completed) {
+                      return a.completed ? 1 : -1;
+                    }
+                    
+                    // Then sort by due date (earlier dates first)
+                    if (a.dueDate && b.dueDate) {
+                      return a.dueDate.toDate().getTime() - b.dueDate.toDate().getTime();
+                    }
+                    
+                    // Tasks with due dates come before tasks without due dates
+                    if (a.dueDate && !b.dueDate) return -1;
+                    if (!a.dueDate && b.dueDate) return 1;
+                    
+                    // Finally sort by creation date (newer first)
+                    return b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime();
+                  })
+                  .map((item) => (
+                    <EnhancedTaskItem
+                      key={item.id}
+                      item={item}
+                      user={user}
+                      onOpenTaskDetail={openTaskDetail}
+                      onDeleteTask={deleteTaskItem}
+                      onToggleTask={toggleTask}
+                    />
+                  ))}
+                {filteredTasks.length === 0 && (
+                  <View style={styles.emptyContainer}>
+                    <Text style={globalStyles.text}>No tasks found. Add your first task!</Text>
+                  </View>
+                )}
+              </View>
+              {/* Goals Heatmap */}
+              <View style={styles.heatmapContainer}>
+                <View style={styles.heatmapHeader}>
+                  <Text style={styles.heatmapTitle}>Your Goals Progress</Text>
+                  {goals.length > 0 && (
+                    <View style={styles.heatmapNavigation}>
                       <TouchableOpacity
-                        style={[
-                          styles.dayCircle,
-                          isSelected && styles.selectedDayCircle,
-                          isTodayDate && styles.todayDayCircle,
-                          {
-                            transform: [
-                              { scale: isTodayDate ? todayPulseAnimation : 1 }
-                            ]
-                          }
-                        ]}
+                        style={styles.heatmapNavButton}
                         onPress={() => {
-                          setSelectedDate(day);
+                          if (heatmapCarouselRef.current) {
+                            const currentIndex = heatmapCarouselRef.current.getCurrentIndex();
+                            if (currentIndex > 0) {
+                              heatmapCarouselRef.current.scrollToIndex(currentIndex - 1);
+                            }
+                          }
                         }}
-                        activeOpacity={0.7}
                       >
-                        <Text style={[
-                          styles.dayName,
-                          isSelected && styles.selectedDayText,
-                          isTodayDate && styles.todayDayText
-                        ]}>
-                          {day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}
-                        </Text>
-                        <View style={[
-                          styles.dayInnerCircle,
-                          isSelected && styles.selectedDayInnerCircle,
-                          isTodayDate && styles.todayDayInnerCircle
-                        ]}>
-                          <Text style={[
-                            styles.dayNumber,
-                            isSelected && styles.selectedDayNumber,
-                            isTodayDate && styles.todayDayNumber
-                          ]}>
-                            {day.getDate()}
-                          </Text>
+                        <View style={styles.heatmapNavButtonCircle}>
+                          <Text style={styles.heatmapNavButtonText}>‹</Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.heatmapNavButton}
+                        onPress={() => {
+                          if (heatmapCarouselRef.current) {
+                            const currentIndex = heatmapCarouselRef.current.getCurrentIndex();
+                            if (currentIndex < goals.length - 1) {
+                              heatmapCarouselRef.current.scrollToIndex(currentIndex + 1);
+                            }
+                          }
+                        }}
+                      >
+                        <View style={styles.heatmapNavButtonCircle}>
+                          <Text style={styles.heatmapNavButtonText}>›</Text>
                         </View>
                       </TouchableOpacity>
                     </View>
-                  );
-                }), [weekStartDate, selectedDate])}
-              </ScrollView>
-
-              {/* Right fade shade */}
-              <View style={styles.rightFade} pointerEvents="none">
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
-                <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
-              </View>
-            </View>
-          </View>
-
-          {/* Today Button */}
-          <View style={{
-            flexDirection: 'row',
-            alignSelf: 'center',
-            alignItems: 'center',
-            paddingHorizontal: scale(16),
-            backgroundColor: 'rgba(255, 255, 255, 0.7)',
-            borderRadius: moderateScale(24),
-            marginBottom: verticalScale(20),
-            borderWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.8)',
-          }}>
-            <Icon name="favorite" size={responsiveFontSize(18)} color={colors.hotPink} />
-            <Text style={[styles.hiText, { marginLeft: scale(8) }]}>Hi, {user?.name || 'User'}, </Text>
-            <TouchableOpacity
-              onPress={() => {
-                const today = new Date();
-                setSelectedDate(today);
-              }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
-            >
-              <Text style={[styles.hiText, { textDecorationLine: 'none', fontWeight: '800' }]}>
-                today is 
-              </Text>
-              <Text style={[styles.hiText, { 
-                textDecorationLine: 'underline', 
-                marginLeft: scale(6),
-                fontWeight: '900'
-              }]}>
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </Text>
-              <Icon name="calendar-today" size={responsiveFontSize(16)} color={colors.electricBlue} style={{ marginLeft: scale(6) }} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Task List */}
-          <View style={styles.taskListContainer}>
-            {filteredTasks
-              .sort((a, b) => {
-                // First sort by completion status (incomplete tasks first)
-                if (a.completed !== b.completed) {
-                  return a.completed ? 1 : -1;
-                }
-                
-                // Then sort by due date (earlier dates first)
-                if (a.dueDate && b.dueDate) {
-                  return a.dueDate.toDate().getTime() - b.dueDate.toDate().getTime();
-                }
-                
-                // Tasks with due dates come before tasks without due dates
-                if (a.dueDate && !b.dueDate) return -1;
-                if (!a.dueDate && b.dueDate) return 1;
-                
-                // Finally sort by creation date (newer first)
-                return b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime();
-              })
-              .map((item) => (
-                <EnhancedTaskItem
-                  key={item.id}
-                  item={item}
-                  user={user}
-                  onOpenTaskDetail={openTaskDetail}
-                  onDeleteTask={deleteTaskItem}
-                  onToggleTask={toggleTask}
-                />
-              ))}
-            {filteredTasks.length === 0 && (
-              <View style={styles.emptyContainer}>
-                <Text style={globalStyles.text}>No tasks found. Add your first task!</Text>
-              </View>
-            )}
-          </View>
-          {/* Goals Heatmap */}
-          <View style={styles.heatmapContainer}>
-            <View style={styles.heatmapHeader}>
-              <Text style={styles.heatmapTitle}>Your Goals Progress</Text>
-              {goals.length > 0 && (
-                <View style={styles.heatmapNavigation}>
-                  <TouchableOpacity
-                    style={styles.heatmapNavButton}
-                    onPress={() => {
-                      if (heatmapCarouselRef.current) {
-                        const currentIndex = heatmapCarouselRef.current.getCurrentIndex();
-                        if (currentIndex > 0) {
-                          heatmapCarouselRef.current.scrollToIndex(currentIndex - 1);
-                        }
-                      }
-                    }}
-                  >
-                    <View style={styles.heatmapNavButtonCircle}>
-                      <Text style={styles.heatmapNavButtonText}>‹</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.heatmapNavButton}
-                    onPress={() => {
-                      if (heatmapCarouselRef.current) {
-                        const currentIndex = heatmapCarouselRef.current.getCurrentIndex();
-                        if (currentIndex < goals.length - 1) {
-                          heatmapCarouselRef.current.scrollToIndex(currentIndex + 1);
-                        }
-                      }
-                    }}
-                  >
-                    <View style={styles.heatmapNavButtonCircle}>
-                      <Text style={styles.heatmapNavButtonText}>›</Text>
-                    </View>
-                  </TouchableOpacity>
+                  )}
                 </View>
-              )}
-            </View>
 
-            {goals.length > 0 ? (
-              <SnappingCarousel
-                ref={heatmapCarouselRef}
-                data={goals}
-                showNavigation={true}
-                slideWidth={widthPercentage(100) - scale(30)} // Account for container padding (15 + 15)
-                renderItem={(goal, index) => {
-                  const { light: lightColor, dark: darkColor } = heatmapColors[goal.id] || { light: colors.electricBlueLight, dark: colors.electricBlueDark };
+                {goals.length > 0 ? (
+                  <SnappingCarousel
+                    ref={heatmapCarouselRef}
+                    data={goals}
+                    showNavigation={true}
+                    slideWidth={widthPercentage(100) - scale(30)} // Account for container padding (15 + 15)
+                    renderItem={(goal, index) => {
+                      const { light: lightColor, dark: darkColor } = heatmapColors[goal.id] || { light: colors.electricBlueLight, dark: colors.electricBlueDark };
+                      const goalProgress = goalsProgress[goal.id] || [];
 
-                  // Calculate streak for this specific goal
-                  const calculateGoalStreak = () => {
-                    const goalProgress = goalsProgress[goal.id] || [];
-                    let streak = 0;
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-
-                    // Count consecutive completed days backwards from today
-                    let currentDate = new Date(today);
-                    while (true) {
-                      const dateStr = currentDate.toISOString().split('T')[0];
-                      const progressRecord = goalProgress.find(p => p.date === dateStr);
-
-                      if (progressRecord && progressRecord.completed) {
-                        streak++;
-                        // Move to previous day
-                        currentDate.setDate(currentDate.getDate() - 1);
-                      } else {
-                        break;
-                      }
-                    }
-
-                    return streak;
-                  };
-
-                  const getDaysInMonth = () => {
-                    const now = new Date();
-                    return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-                  };
-
-                  const calculateCompletionPercentage = () => {
-                    const goalProgress = goalsProgress[goal.id] || [];
-                    const now = new Date();
-                    const currentMonth = now.getMonth();
-                    const currentYear = now.getFullYear();
-
-                    // Get the number of days in the current month
-                    const daysInMonth = getDaysInMonth();
-
-                    // Count completed days in the current month
-                    let completedDays = 0;
-                    for (let day = 1; day <= daysInMonth; day++) {
-                      const date = new Date(currentYear, currentMonth, day);
-                      const dateStr = date.toISOString().split('T')[0];
-                      const progressRecord = goalProgress.find(p => p.date === dateStr);
-
-                      if (progressRecord && progressRecord.completed) {
-                        completedDays++;
-                      }
-                    }
-
-                    // Calculate percentage based on total days in month
-                    return Math.round((completedDays / daysInMonth) * 100);
-                  };
-
-                  const daysInMonth = getDaysInMonth();
-                  const completionPercentage = calculateCompletionPercentage();
-                  const streak = calculateGoalStreak();
-
-                  return (
-                    <View key={goal.id} style={styles.goalHeatmapContainer}>
-                      <View style={[styles.goalHeatmap, { backgroundColor: lightColor }]}>
-                        <View style={styles.goalHeader}>
-                          <Text style={[styles.goalName, { color: darkColor }]} numberOfLines={1}>
-                            {goal.text}
-                          </Text>
-                          <View style={styles.streakContainer}>
-                            <Icon name="local-fire-department" size={responsiveFontSize(16)} color={colors.streakHighlight} />
-                            <Text style={styles.streakText}>{streak} days</Text>
-                          </View>
-                        </View>
-                        <View style={styles.progressContainer}>
-                          <Text style={[styles.progressText, { color: darkColor }]}>{Math.round((completionPercentage / 100) * daysInMonth)} of {daysInMonth} days completed</Text>
-                          <View style={styles.progressBarContainer}>
-                            <View style={[styles.progressBar, { 
-                              backgroundColor: darkColor,
-                              width: `${completionPercentage}%` 
-                            }]} />
-                          </View>
-                        </View>
-                        <TouchableOpacity
-                          style={[styles.dailyCheckButton, { 
-                            backgroundColor: `${darkColor}33`, // Glass effect
-                            borderColor: darkColor,
-                            borderWidth: 1
-                          }]}
-                          onPress={() => {
-                            if (user) {
-                              const today = new Date();
-                              today.setHours(0, 0, 0, 0); // Normalize the time
-                              today.setMilliseconds(0); // Ensure milliseconds are zero
-                              
-                              // Mark today as completed for this goal directly
-                              Alert.alert(
-                                'Mark Completed',
-                                `Did you complete "${goal.text}" today?`,
-                                [
-                                  {
-                                    text: 'Cancel',
-                                    style: 'cancel'
-                                  },
-                                  {
-                                    text: 'No',
-                                    onPress: async () => {
-                                      // Mark today as missed for this goal
-                                      try {
-                                        const progress: GoalProgress = await updateGoalProgress(goal.id, today, false, user.uid);
-                                        // Update local state with a new object reference to trigger re-render
-                                        setGoalsProgress(prev => {
-                                          const existingProgress = prev[goal.id] || [];
-                                          // Filter out any existing record for this date
-                                          const filteredProgress = existingProgress.filter(p => p.date !== progress.date);
-                                          // Add the new/updated record
-                                          const newProgress = [...filteredProgress, progress];
-                                          return {
-                                            ...prev,
-                                            [goal.id]: newProgress
-                                          };
-                                        });
-                                      } catch (error) {
-                                        console.error('Error marking goal as missed:', error);
-                                        Alert.alert('Error', 'Failed to mark goal as missed. Please try again.');
-                                      }
-                                    }
-                                  },
-                                  {
-                                    text: 'Yes',
-                                    onPress: async () => {
-                                      // Mark today as completed for this goal
-                                      try {
-                                        const progress: GoalProgress = await updateGoalProgress(goal.id, today, true, user.uid);
-                                        // Update local state with a new object reference to trigger re-render
-                                        setGoalsProgress(prev => {
-                                          const existingProgress = prev[goal.id] || [];
-                                          // Filter out any existing record for this date
-                                          const filteredProgress = existingProgress.filter(p => p.date !== progress.date);
-                                          // Add the new/updated record
-                                          const newProgress = [...filteredProgress, progress];
-                                          return {
-                                            ...prev,
-                                            [goal.id]: newProgress
-                                          };
-                                        });
-                                      } catch (error) {
-                                        console.error('Error marking goal as completed:', error);
-                                        Alert.alert('Error', 'Failed to mark goal as completed. Please try again.');
-                                      }
-                                    }
-                                  }
-                                ]
-                              );
-                            }
+                      return (
+                        <HeatmapItem
+                          goal={goal}
+                          goalId={goal.id}
+                          lightColor={lightColor}
+                          darkColor={darkColor}
+                          goalProgress={goalProgress}
+                          onUpdateProgress={(goalId, newProgress) => {
+                            setGoalsProgress(prev => ({
+                              ...prev,
+                              [goalId]: newProgress
+                            }));
                           }}
-                        >
-                          <Icon name="check-circle" size={responsiveFontSize(16)} color={darkColor} />
-                          <Text style={[styles.dailyCheckButtonText, { color: darkColor }]}>Done Today</Text>
-                        </TouchableOpacity>
-                        <View style={[styles.heatmapCalendar, { backgroundColor: `${lightColor}80` }]}>
-                          {/* Days of week header */}
-                          <View style={[styles.heatmapWeekDays, { backgroundColor: darkColor }]}>
-                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-                              <Text key={index} style={[styles.heatmapWeekDayText, { color: colors.textLight }]}>
-                                {day}
-                              </Text>
-                            ))}
-                          </View>
-                          <View style={styles.heatmapGrid}>
-                            {(heatmapDaysRef.current && heatmapDaysRef.current.length > 0) ? (
-                              heatmapDaysRef.current.map((day, index) => {
-                                const dateStr = day.date.toISOString().split('T')[0];
-                                const goalProgress = goalsProgress[goal.id] || [];
-                                const progressRecord = goalProgress.find(p => p.date === dateStr);
-
-                                // Determine cell color based on progress
-                                let cellBackgroundColor = `${lightColor}60`;
-                                let cellTextColor = colors.text;
-
-                                if (progressRecord) {
-                                  if (progressRecord.completed) {
-                                    // Completed day - use dark background color
-                                    cellBackgroundColor = darkColor;
-                                    cellTextColor = colors.textLight;
-                                  } else {
-                                    // Missed day - use error color
-                                    cellBackgroundColor = colors.error;
-                                    cellTextColor = colors.textLight;
-                                  }
-                                } else {
-                                  // Future or unmarked date
-                                  const today = new Date();
-                                  today.setHours(0, 0, 0, 0);
-                                  const checkDate = new Date(day.date);
-                                  checkDate.setHours(0, 0, 0, 0);
-                                  
-                                  if (checkDate > today) {
-                                    // Future date - lighter background
-                                    cellBackgroundColor = `${lightColor}40`;
-                                  } else {
-                                    // Past unmarked date - default light background
-                                    cellBackgroundColor = `${lightColor}60`;
-                                  }
-                                }
-
-                                // Special handling for today
-                                const isTodayDate = isToday(day.date);
-                                if (isTodayDate) {
-                                  cellBackgroundColor = darkColor;
-                                  cellTextColor = colors.textLight;
-                                }
-
-                                // Special handling for streak highlight (yellow)
-                                const isStreakDay = streak > 0 && (() => {
-                                  // Logic: if this date is within the streak period counting backwards from today
-                                  const today = new Date();
-                                  today.setHours(0, 0, 0, 0);
-                                  const checkDate = new Date(day.date);
-                                  checkDate.setHours(0, 0, 0, 0);
-                                  
-                                  // Only highlight dates that are on or before today
-                                  if (checkDate > today) {
-                                    return false;
-                                  }
-                                  
-                                  // Calculate the difference in days
-                                  const diffTime = today.getTime() - checkDate.getTime();
-                                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                  
-                                  // Highlight if within the streak period
-                                  return diffDays < streak;
-                                })();
-
-                                return (
-                                  <TouchableOpacity
-                                    key={`${goal.id}-${dateStr}-${index}`}
-                                    style={[
-                                      styles.heatmapDateCell,
-                                      day.isCurrentMonth ? styles.currentMonthCell : styles.otherMonthCell,
-                                      isTodayDate && styles.todayDateCell,
-                                      {
-                                        backgroundColor: isStreakDay ? colors.streakHighlight : cellBackgroundColor,
-                                        borderColor: isStreakDay ? colors.streakHighlight : darkColor,
-                                      }
-                                    ]}
-                                    onPress={() => {
-                                      // Handle cell press - would mark goal progress for this day
-                                      handleDatePress(day.date, goal.id);
-                                    }}
-                                    disabled={!day.isCurrentMonth}
-                                    activeOpacity={0.7}
-                                  >
-                                    <Text style={[
-                                      styles.heatmapDateText,
-                                      day.isCurrentMonth ? styles.currentMonthDateText : styles.otherMonthDateText,
-                                      isTodayDate && styles.todayDateText,
-                                      { 
-                                        color: isStreakDay ? colors.text : cellTextColor 
-                                      }
-                                    ]}>
-                                      {day.day}
-                                    </Text>
-                                  </TouchableOpacity>
-                                );
-                              })
-                            ) : (
-                              // Fallback - generate heatmap days if not available
-                              <Text style={styles.noGoalsText}>Loading heatmap...</Text>
-                            )}
-                          </View>
-                        </View>
-                        {/* Heatmap Legend */}
-                        <View style={styles.heatmapLegend}>
-                          <View style={styles.legendItem}>
-                            <View style={[styles.legendColorBox, { backgroundColor: darkColor }]} />
-                            <Text style={styles.legendText}>Completed</Text>
-                          </View>
-                          <View style={styles.legendItem}>
-                            <View style={[styles.legendColorBox, styles.legendMissed]} />
-                            <Text style={styles.legendText}>Missed</Text>
-                          </View>
-                          <View style={styles.legendItem}>
-                            <View style={[styles.legendColorBox, styles.legendDefault]} />
-                            <Text style={styles.legendText}>Not Marked</Text>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-                  );
-                }}
-              />
-            ) : (
-              <View style={styles.noGoalsContainer}>
-                <Icon name="emoji-events" size={responsiveFontSize(40)} color={colors.textSecondary} />
-                <Text style={styles.noGoalsText}>No goals yet. Add goals to see your progress heatmap.</Text>
+                          user={user}
+                          heatmapDays={heatmapDaysRef.current || []}
+                        />
+                      );
+                    }}
+                  />
+                ) : (
+                  <View style={styles.noGoalsContainer}>
+                    <Icon name="emoji-events" size={responsiveFontSize(40)} color={colors.textSecondary} />
+                    <Text style={styles.noGoalsText}>No goals yet. Add goals to see your progress heatmap.</Text>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
-        </Animated.ScrollView>
+            </Animated.ScrollView>
+          </>
+        )}
 
-        {/* Add Task Modal */}
+        {/* Task Modal */}
         <Modal
-          visible={isAddTaskModalVisible}
+          visible={isTaskModalVisible}
           animationType="slide"
           transparent={true}
-          onRequestClose={() => setIsAddTaskModalVisible(false)}
+          onRequestClose={() => {
+            setIsTaskModalVisible(false);
+            setSelectedTask(null);
+          }}
         >
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -1695,13 +1669,13 @@ const MainHomeScreen = () => {
           >
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
-                Add Task for {newTaskDate ? newTaskDate.toDateString() : ''}
+                {selectedTask ? 'Edit Event' : `Add Task for ${taskDate.toDateString()}`}
               </Text>
               <TextInput
                 style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
                 placeholder="Task title"
-                value={newTaskText}
-                onChangeText={setNewTaskText}
+                value={taskTitle}
+                onChangeText={setTaskTitle}
                 autoFocus={true}
                 editable={!addingTask}
               />
@@ -1709,8 +1683,8 @@ const MainHomeScreen = () => {
               <TextInput
                 style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
                 placeholder="Task description (optional)"
-                value={newTaskDescription}
-                onChangeText={setNewTaskDescription}
+                value={taskDescription}
+                onChangeText={setTaskDescription}
                 multiline
                 textAlignVertical="top"
               />
@@ -1741,9 +1715,9 @@ const MainHomeScreen = () => {
                           key={`row1-${emoji}-${index}`}
                           style={[
                             styles.emojiOption,
-                            selectedEmoji === emoji && styles.selectedEmoji
+                            taskEmoji === emoji && styles.selectedEmoji
                           ]}
-                          onPress={() => setSelectedEmoji(emoji)}
+                          onPress={() => setTaskEmoji(emoji)}
                         >
                           <Text style={styles.emojiOptionText}>{emoji}</Text>
                         </TouchableOpacity>
@@ -1765,9 +1739,9 @@ const MainHomeScreen = () => {
                           key={`row2-${emoji}-${index}`}
                           style={[
                             styles.emojiOption,
-                            selectedEmoji === emoji && styles.selectedEmoji
+                            taskEmoji === emoji && styles.selectedEmoji
                           ]}
-                          onPress={() => setSelectedEmoji(emoji)}
+                          onPress={() => setTaskEmoji(emoji)}
                         >
                           <Text style={styles.emojiOptionText}>{emoji}</Text>
                         </TouchableOpacity>
@@ -1786,14 +1760,14 @@ const MainHomeScreen = () => {
                 </View>
                 <View style={styles.timePickerLayout}>
                   <View style={styles.timePickerGroup}>
-                    {renderTimePicker(getDayHours(), startHour, setStartHour)}
+                    <TimePicker items={getDayHours()} selectedValue={taskStartHour} onValueChange={setTaskStartHour} />
                     <Text style={styles.timePickerSeparator}>:</Text>
-                    {renderTimePicker(getMinutes(), startMinute, setStartMinute)}
+                    <TimePicker items={getMinutes()} selectedValue={taskStartMinute} onValueChange={setTaskStartMinute} />
                   </View>
                   <View style={styles.timePickerGroup}>
-                    {renderTimePicker(getDayHours(), endHour, setEndHour)}
+                    <TimePicker items={getDayHours()} selectedValue={taskEndHour} onValueChange={setTaskEndHour} />
                     <Text style={styles.timePickerSeparator}>:</Text>
-                    {renderTimePicker(getMinutes(), endMinute, setEndMinute)}
+                    <TimePicker items={getMinutes()} selectedValue={taskEndMinute} onValueChange={setTaskEndMinute} />
                   </View>
                 </View>
               </View>
@@ -1801,181 +1775,26 @@ const MainHomeScreen = () => {
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={[globalStyles.button, globalStyles.outlineButton, styles.modalButton]}
-                  onPress={() => setIsAddTaskModalVisible(false)}
+                  onPress={() => {
+                    setIsTaskModalVisible(false);
+                    setSelectedTask(null);
+                  }}
                   disabled={addingTask}
                 >
                   <Text style={[globalStyles.buttonText, globalStyles.outlineButtonText]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[globalStyles.button, styles.modalButton, addingTask && globalStyles.disabledButton, {backgroundColor: getButtonColor(themePalette.primary)}]}
-                  onPress={() => {
-                    if (newTaskText.trim()) {
-                      addTask();
-                      setIsAddTaskModalVisible(false);
-                    }
-                  }}
-                  disabled={!newTaskText.trim() || addingTask}
+                  onPress={handleSaveTask}
+                  disabled={!taskTitle.trim() || addingTask}
                 >
                   {addingTask ? (
                     <ActivityIndicator color={colors.textLight} size="small" />
                   ) : (
-                    <Text style={globalStyles.buttonText}>Add Task</Text>
+                    <Text style={globalStyles.buttonText}>{selectedTask ? 'Update Event' : 'Add Task'}</Text>
                   )}
                 </TouchableOpacity>
               </View>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-
-        {/* Task Detail Modal */}
-        <Modal
-          visible={!!selectedTask}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setSelectedTask(null)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.modalContainer}
-          >
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>
-                Edit Event
-              </Text>
-
-              {selectedTask && (
-                <>
-                  <TextInput
-                    style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
-                    placeholder="Task title"
-                    value={editTaskTitle}
-                    onChangeText={setEditTaskTitle}
-                    autoFocus={true}
-                  />
-
-                  <TextInput
-                    style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
-                    placeholder="Task description"
-                    value={editTaskDescription}
-                    onChangeText={setEditTaskDescription}
-                    multiline
-                    textAlignVertical="top"
-                  />
-
-                  {/* Emoji Selection */}
-                  <View style={styles.emojiSelectionContainer}>
-                    <Text style={styles.emojiSelectionTitle}>Choose an Emoji:</Text>
-                    <ScrollView
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.emojiScrollView}
-                      contentContainerStyle={styles.emojiScrollContent}
-                      horizontal={true}
-                    >
-                      <View style={styles.emojiRowContainer}>
-                        <View style={styles.emojiRow}>
-                          {[
-                            // Row 1 - Events, Activities, Objects
-                            '🎯', '🎉', '🥳', '🎊', '🎂', '🎁', '🎈', '🎆', '🎇', '🧨',
-                            '✨', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎬', '🎭', '🎨',
-                            '🎪', '🎫', '🎟️', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
-                            '🎤', '🎧', '🎮', '🎲', '♟️', '⚽', '🏀', '🏈', '⚾', '🎾',
-                            '🏐', '🏉', '🎱', '🪀', '🏓', '🏸', '🥅', '⛳', '🪁', '🏹',
-                            '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '⛸️', '🥌', '🎿',
-                            '⛷️', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️',
-                            '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆'
-                          ].map((emoji, index) => (
-                            <TouchableOpacity
-                              key={`edit-row1-${emoji}-${index}`}
-                              style={[
-                                styles.emojiOption,
-                                editTaskEmoji === emoji && styles.selectedEmoji
-                              ]}
-                              onPress={() => setEditTaskEmoji(emoji)}
-                            >
-                              <Text style={styles.emojiOptionText}>{emoji}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                        <View style={styles.emojiRow}>
-                          {[
-                            // Row 2 - Food, Nature, Faces, Hearts
-                            '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒',
-                            '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬',
-                            '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐',
-                            '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇',
-                            '🥓', '🥩', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪',
-                            '🥗', '🍿', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍮', '🎂',
-                            '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
-                            '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚'
-                          ].map((emoji, index) => (
-                            <TouchableOpacity
-                              key={`edit-row2-${emoji}-${index}`}
-                              style={[
-                                styles.emojiOption,
-                                editTaskEmoji === emoji && styles.selectedEmoji
-                              ]}
-                              onPress={() => setEditTaskEmoji(emoji)}
-                            >
-                              <Text style={styles.emojiOptionText}>{emoji}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-                    </ScrollView>
-                  </View>
-
-                  {/* Time Selection */}
-                  <View style={styles.timeSelectionContainer}>
-                    <Text style={styles.timeSelectionTitle}>Select Time:</Text>
-                    <View style={styles.timePickerHeaders}>
-                      <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>From:</Text>
-                      <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>To:</Text>
-                    </View>
-                    <View style={styles.timePickerLayout}>
-                      <View style={styles.timePickerGroup}>
-                        {renderTimePicker(getDayHours(), editStartHour, (value) => setEditStartHour(value))}
-                        <Text style={styles.timePickerSeparator}>:</Text>
-                        {renderTimePicker(getMinutes(), editStartMinute, (value) => setEditStartMinute(value))}
-                      </View>
-                      <View style={styles.timePickerGroup}>
-                        {renderTimePicker(getDayHours(), editEndHour, (value) => setEditEndHour(value))}
-                        <Text style={styles.timePickerSeparator}>:</Text>
-                        {renderTimePicker(getMinutes(), editEndMinute, (value) => setEditEndMinute(value))}
-                      </View>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity 
-                    style={styles.dateDisplay}
-                    onPress={() => {
-                      setTempSelectedDate(selectedTask.dueDate?.toDate() || new Date());
-                      setShowTaskDetailDatePicker(true);
-                    }}
-                  >
-                    <View style={styles.taskDetailDateContent}>
-                      <Icon name="event" size={responsiveFontSize(18)} color={colors.electricBlue} />
-                      <Text style={styles.dateDisplayText}>
-                        {selectedTask.dueDate ? selectedTask.dueDate.toDate().toLocaleDateString() : 'Set date'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <View style={styles.modalButtons}>
-                    <TouchableOpacity
-                      style={[globalStyles.button, globalStyles.outlineButton, styles.modalButton]}
-                      onPress={() => setSelectedTask(null)}
-                    >
-                      <Text style={[globalStyles.buttonText, globalStyles.outlineButtonText]}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[globalStyles.button, styles.modalButton, {backgroundColor: getButtonColor(themePalette.primary)}]}
-                      onPress={saveTaskEdits}
-                    >
-                      <Text style={globalStyles.buttonText}>Update Event</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
             </View>
           </KeyboardAvoidingView>
         </Modal>
@@ -2063,6 +1882,7 @@ const MainHomeScreen = () => {
                 <TouchableOpacity
                   style={styles.pickerConfirmButton}
                   onPress={() => {
+                    setTaskDate(tempSelectedDate);
                     setShowTaskDetailDatePicker(false);
                   }}
                 >
@@ -2280,7 +2100,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     // Flat surface with no shadow
   },
-  currentMonthCell: {},
+  currentMonthCell: {
+  },
   otherMonthCell: {
     opacity: 0.4,
   },
@@ -2288,8 +2109,10 @@ const styles = StyleSheet.create({
     fontSize: responsiveFontSize(10),
     fontWeight: '700',
   },
-  currentMonthDateText: {},
-  otherMonthDateText: {},
+  currentMonthDateText: {
+  },
+  otherMonthDateText: {
+  },
   todayDateCell: {
     // Flat surface with no shadow
   },
@@ -2905,4 +2728,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MainHomeScreen;
+export default React.memo(MainHomeScreen);
