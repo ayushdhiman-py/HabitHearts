@@ -25,6 +25,9 @@ export interface Task {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   status: string;
+  emoji?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 // Create a new task

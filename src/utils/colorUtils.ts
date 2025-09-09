@@ -70,3 +70,78 @@ export const getTextColorForBackground = (backgroundColor: string): string => {
     return luminance > 0.4 ? colors.text : colors.textLight;
   }
 };
+
+/**
+ * Lightens a hex color by a given percentage.
+ * @param hex - The hex color string (e.g., "#RRGGBB").
+ * @param percent - The percentage to lighten the color (0-100).
+ * @returns The lightened hex color string.
+ */
+export const lightenColor = (hex: string, percent: number): string => {
+  // Remove the hash at the start if it's there
+  hex = hex.replace(/^#/, '');
+
+  // Parse the r, g, b values
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+
+  // Calculate the lighten amount
+  const amount = Math.round(2.55 * percent);
+
+  // Lighten the color
+  r = Math.min(255, r + amount);
+  g = Math.min(255, g + amount);
+  b = Math.min(255, b + amount);
+
+  // Convert back to hex
+  const toHex = (c: number) => ('0' + c.toString(16)).slice(-2);
+  
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
+/**
+ * Darkens a hex color by a given percentage.
+ * @param hex - The hex color string (e.g., "#RRGGBB").
+ * @param percent - The percentage to darken the color (0-100).
+ * @returns The darkened hex color string.
+ */
+export const darkenColor = (hex: string, percent: number): string => {
+  // Remove the hash at the start if it's there
+  hex = hex.replace(/^#/, '');
+
+  // Parse the r, g, b values
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+
+  // Calculate the darken amount
+  const amount = Math.round(2.55 * percent);
+
+  // Darken the color
+  r = Math.max(0, r - amount);
+  g = Math.max(0, g - amount);
+  b = Math.max(0, b - amount);
+
+  // Convert back to hex
+  const toHex = (c: number) => ('0' + c.toString(16)).slice(-2);
+  
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
+/**
+ * Converts a hex color string to an RGB color string.
+ * @param hex - The hex color string (e.g., "#RRGGBB").
+ * @returns The RGB color string (e.g., "rgb(r, g, b)").
+ */
+export const hexToRgb = (hex: string): string => {
+  // Remove the hash at the start if it's there
+  hex = hex.replace(/^#/, '');
+
+  // Parse the r, g, b values
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+
+  return `rgb(${r}, ${g}, ${b})`;
+};

@@ -1,18 +1,40 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, FlatList, TouchableOpacity, Alert, Modal } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Modal,
+  TouchableOpacity,
+  Alert,
+  TextInput,
+  FlatList,
+  BackHandler,
+  Platform,
+  Image,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { getGoalsForUserAndLinked, createGoal, updateGoal, deleteGoal } from '../services/goalService';
-import { getLinkedUsers } from '../services/userService';
-import { getGoalsProgress, GoalProgress } from '../services/goalProgressService';
+import { useStatusBar } from '../context/StatusBarContext';
+import { createGoal, updateGoal, deleteGoal, Goal, subscribeToGoalsForUserAndLinked, getGoalsForUserAndLinked } from '../services/goalService';
+import { getLinkedUsers, User as UserServiceUser } from '../services/userService';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import LinearGradient from 'react-native-linear-gradient';
+import { getTextColorForBackground } from '../utils/colorUtils';
+import { getButtonColor } from '../utils/buttonUtils';
 
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Timestamp } from 'firebase/firestore';
+import { useFocusEffect } from '@react-navigation/native';
+import { swipeableManager } from '../utils/swipeableManager';
+import { getGoalsProgress, GoalProgress } from '../services/goalProgressService';
+
+// Memoize the component to prevent unnecessary re-renders
 const GoalsScreen = () => {
   const { user } = useAuth() as { user: any };
+  const { screenBackgroundColor, backgroundColor, themePalette } = useStatusBar();
   const [goals, setGoals] = useState<any[]>([]);
   const [goalsProgress, setGoalsProgress] = useState<Record<string, GoalProgress[]>>({});
   const [goalText, setGoalText] = useState('');
@@ -23,7 +45,6 @@ const GoalsScreen = () => {
   const [editingGoal, setEditingGoal] = useState<any>(null);
   const [editGoalText, setEditGoalText] = useState('');
   const [newGoalText, setNewGoalText] = useState('');
-  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const fetchGoals = async () => {
@@ -257,48 +278,57 @@ const GoalsScreen = () => {
 
   if (loading) {
     return (
-      <View style={[globalStyles.container, { paddingTop: insets.top }]}>
-        <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
-          <Text style={styles.title}>Your Goals</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+        <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
+          <View style={[styles.header, { backgroundColor: backgroundColor }]}>
+            <Text style={[styles.title, { color: getTextColorForBackground(backgroundColor) }]}>Your Goals</Text>
+          </View>
+          <View style={globalStyles.card}>
+            <Text style={globalStyles.text}>Loading goals...</Text>
+          </View>
         </View>
-        <View style={globalStyles.card}>
-          <Text style={globalStyles.text}>Loading goals...</Text>
-        </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[globalStyles.container, { paddingTop: insets.top }]}>
-      <View style={[styles.header, { marginTop: insets.top > 0 ? 0 : verticalScale(10) }]}>
-        <Text style={styles.title}>Your Goals</Text>
-        <TouchableOpacity
-          style={styles.headerAddButton}
-          onPress={openAddGoalModal}
-        >
-          <Icon name="add" size={responsiveFontSize(24)} color={colors.textLight} />
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.goalsContainer}>
-        <FlatList
-          data={goals}
-          renderItem={renderGoal}
-          keyExtractor={item => item.id}
-          style={styles.list}
-          contentContainerStyle={goals.length === 0 ? styles.emptyList : { paddingBottom: verticalScale(55) }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Icon name="emoji-events" size={responsiveFontSize(60)} color={colors.textSecondary} />
-              <Text style={[globalStyles.text, { marginTop: verticalScale(16), fontSize: responsiveFontSize(18) }]}>
-                No goals yet
-              </Text>
-              <Text style={[globalStyles.textSecondary, { marginTop: verticalScale(8), textAlign: 'center' }]}>
-                Tap the + button to add your first goal and start your journey!
-              </Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+      <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
+        <View style={[styles.header, { backgroundColor: backgroundColor }]}>
+          <Text style={[styles.title, { color: getTextColorForBackground(backgroundColor) }]}>Your Goals</Text>
+          <TouchableOpacity
+            style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary) }]}
+            onPress={openAddGoalModal}
+          >
+            <Icon name="add" size={responsiveFontSize(24)} color={colors.textLight} />
+          </TouchableOpacity>
+        </View>
+        
+        <ScrollView style={styles.mainScrollView}>
+          <View style={{ marginTop: verticalScale(16) }}>
+            <View style={styles.goalsContainer}>
+              <FlatList
+                data={goals}
+                renderItem={renderGoal}
+                keyExtractor={item => item.id}
+                style={styles.list}
+                contentContainerStyle={goals.length === 0 ? styles.emptyList : { paddingBottom: verticalScale(55) }}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Icon name="emoji-events" size={responsiveFontSize(60)} color={colors.textSecondary} />
+                    <Text style={[globalStyles.text, { marginTop: verticalScale(16), fontSize: responsiveFontSize(18) }]}>
+                      No goals yet
+                    </Text>
+                    <Text style={[globalStyles.textSecondary, { marginTop: verticalScale(8), textAlign: 'center' }]}>
+                      Tap the + button to add your first goal and start your journey!
+                    </Text>
+                  </View>
+                }
+                scrollEnabled={false}
+              />
             </View>
-          }
-        />
+          </View>
+        </ScrollView>
       </View>
       
       {/* Edit Goal Modal */}
@@ -400,11 +430,14 @@ const GoalsScreen = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  mainScrollView: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -416,9 +449,7 @@ const styles = StyleSheet.create({
   },
   headerAddButton: {
     padding: scale(12),
-    backgroundColor: colors.electricBlue,
     borderRadius: moderateScale(16),
-    shadowColor: colors.electricBlue,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -432,11 +463,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
-  },
-  addButton: {
-    backgroundColor: colors.hotPink,
-    marginLeft: scale(8),
-    paddingHorizontal: scale(16),
   },
   goalsContainer: {
     flex: 1,

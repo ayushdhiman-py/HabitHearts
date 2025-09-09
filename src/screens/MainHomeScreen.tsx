@@ -16,8 +16,10 @@ import {
   Animated,
   Image,
   InteractionManager,
+  KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { subscribeToTasksForUserAndLinked, createTask, updateTask, deleteTask, toggleTaskCompletion, Task } from '../services/taskService';
 import { getLinkedUsers, User as UserServiceUser } from '../services/userService';
@@ -28,8 +30,9 @@ import { getGoalsProgress, updateGoalProgress, GoalProgress } from '../services/
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
-import DatePicker from 'react-native-date-picker';
+import { useStatusBar } from '../context/StatusBarContext';
 import { getTextColorForBackground } from '../utils/colorUtils';
+import { getButtonColor } from '../utils/buttonUtils';
 
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import SnappingCarousel, { SnappingCarouselRef } from '../components/SnappingCarousel';
@@ -38,7 +41,7 @@ import EnhancedTaskItem from '../components/home/EnhancedTaskItem';
 import { swipeableManager } from '../utils/swipeableManager';
 
 // Reanimated imports
-import Reanimated from 'react-native-reanimated';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Conditional import for DateTimePicker
 let DateTimePicker: any = null;
@@ -56,34 +59,7 @@ interface User {
 // Define header height as a constant
 const HEADER_HEIGHT = verticalScale(60);
 
-const getDarkerColor = (hexColor: string, factor: number = 0.8): string => {
-  if (hexColor.startsWith('rgb')) {
-    return hexColor;
-  }
-  // If it's already a dark color or a predefined dark color, return as is
-  if (hexColor.includes('Dark')) {
-    return hexColor;
-  }
-  
-  // Convert hex to RGB
-  let r, g, b;
-  if (hexColor.length === 4) {
-    r = parseInt(hexColor[1] + hexColor[1], 16);
-    g = parseInt(hexColor[2] + hexColor[2], 16);
-    b = parseInt(hexColor[3] + hexColor[3], 16);
-  } else {
-    r = parseInt(hexColor.slice(1, 3), 16);
-    g = parseInt(hexColor.slice(3, 5), 16);
-    b = parseInt(hexColor.slice(5, 7), 16);
-  }
 
-  // Darken each component
-  const darkR = Math.floor(r * factor);
-  const darkG = Math.floor(g * factor);
-  const darkB = Math.floor(b * factor);
-
-  return `rgb(${darkR}, ${darkG}, ${darkB})`;
-};
 
 // Helper function to get a random bright color for heatmap
 const getRandomBrightColor = () => {
@@ -100,9 +76,10 @@ const getRandomBrightColor = () => {
     return brightColors[Math.floor(Math.random() * brightColors.length)];
   };
 
+// Memoize the component to prevent unnecessary re-renders
 const MainHomeScreen = () => {
   const { user } = useAuth() as { user: User | null };
-  const insets = useSafeAreaInsets();
+  const { screenBackgroundColor, backgroundColor, setStatusBar, themePalette } = useStatusBar();
   const [task, setTask] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
@@ -122,16 +99,23 @@ const MainHomeScreen = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskDescription, setEditTaskDescription] = useState('');
+  const [editTaskEmoji, setEditTaskEmoji] = useState('🎯');
+  const [editStartHour, setEditStartHour] = useState(0);
+  const [editStartMinute, setEditStartMinute] = useState(0);
+  const [editEndHour, setEditEndHour] = useState(0);
+  const [editEndMinute, setEditEndMinute] = useState(0);
   const [isAddTaskModalVisible, setIsAddTaskModalVisible] = useState(false);
   const [newTaskText, setNewTaskText] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskDate, setNewTaskDate] = useState(new Date());
+  const [selectedEmoji, setSelectedEmoji] = useState('🎯'); // Default emoji
+  const [startHour, setStartHour] = useState(0); // Default start hour (0-23)
+  const [startMinute, setStartMinute] = useState(0); // Default start minute (0,15,30,45)
+  const [endHour, setEndHour] = useState(0); // Default end hour (0-23)
+  const [endMinute, setEndMinute] = useState(0); // Default end minute (0,15,30,45)
   // For task detail modal date/time picker
   const [showTaskDetailDatePicker, setShowTaskDetailDatePicker] = useState(false);
   const [showTaskDetailTimePicker, setShowTaskDetailTimePicker] = useState(false);
-  // For add task modal date/time picker
-  const [showAddTaskDatePicker, setShowAddTaskDatePicker] = useState(false);
-  const [showAddTaskTimePicker, setShowAddTaskTimePicker] = useState(false);
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
   const [datePickerMode, setDatePickerMode] = useState<'date' | 'time'>('date');
   const [goals, setGoals] = useState<any[]>([]);
@@ -149,6 +133,13 @@ const MainHomeScreen = () => {
   const runnerAnimation = useRef(new Animated.Value(0)).current;
   const todayPulseAnimation = useRef(new Animated.Value(1)).current;
   const buttonPressAnimation = useRef(new Animated.Value(1)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      // Set status bar to match the app's primary theme
+      setStatusBar(themePalette.statusBar, 'light-content');
+    }, [setStatusBar, themePalette.statusBar])
+  );
 
   // For animated header
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -184,11 +175,17 @@ const MainHomeScreen = () => {
     return [];
   }, [user]);
 
-  // Refresh heatmap days when goals change
+  // Initialize heatmap days and refresh when goals change
   useEffect(() => {
-    const newDays = generateCalendarDaysForHeatmap();
-    heatmapDaysRef.current = newDays;
-    console.log('Heatmap days updated:', newDays.length);
+    console.log('Initializing heatmap days...');
+    if (!heatmapDaysRef.current || heatmapDaysRef.current.length === 0) {
+      console.log('Heatmap days not initialized, generating...');
+      const newDays = generateCalendarDaysForHeatmap();
+      heatmapDaysRef.current = newDays;
+      console.log('Heatmap days initialized:', newDays.length);
+    } else {
+      console.log('Heatmap days already initialized:', heatmapDaysRef.current.length);
+    }
     
     // Generate random colors for each goal heatmap
     const newHeatmapColors: Record<string, {light: string, dark: string}> = {};
@@ -202,19 +199,6 @@ const MainHomeScreen = () => {
       setHeatmapColors(prev => ({ ...prev, ...newHeatmapColors }));
     }
   }, [goals]);
-
-  // Initialize heatmap days
-  useEffect(() => {
-    console.log('Initializing heatmap days...');
-    if (!heatmapDaysRef.current || heatmapDaysRef.current.length === 0) {
-      console.log('Heatmap days not initialized, generating...');
-      const newDays = generateCalendarDaysForHeatmap();
-      heatmapDaysRef.current = newDays;
-      console.log('Heatmap days initialized:', newDays.length);
-    } else {
-      console.log('Heatmap days already initialized:', heatmapDaysRef.current.length);
-    }
-  }, []);
 
   // Pulse animation for today's date
   useEffect(() => {
@@ -304,12 +288,6 @@ const MainHomeScreen = () => {
       } else if (showTaskDetailTimePicker) {
         setShowTaskDetailTimePicker(false);
         return true; // Prevent default back behavior
-      } else if (showAddTaskDatePicker) {
-        setShowAddTaskDatePicker(false);
-        return true; // Prevent default back behavior
-      } else if (showAddTaskTimePicker) {
-        setShowAddTaskTimePicker(false);
-        return true; // Prevent default back behavior
       } else if (selectedTask) {
         setSelectedTask(null);
         return true; // Prevent default back behavior
@@ -321,7 +299,7 @@ const MainHomeScreen = () => {
     });
 
     return () => backHandler.remove();
-  }, [selectedTask, isAddTaskModalVisible, showTaskDetailDatePicker, showTaskDetailTimePicker, showAddTaskDatePicker, showAddTaskTimePicker]);
+  }, [selectedTask, isAddTaskModalVisible, showTaskDetailDatePicker, showTaskDetailTimePicker]);
 
   // Scroll to today's date when component mounts
   useEffect(() => {
@@ -468,41 +446,74 @@ const MainHomeScreen = () => {
   }, [tasks, searchQuery, normalizedSelectedDate]);
 
   const addTask = async () => {
-    if (newTaskText.trim() && user) {
+    if (newTaskText.trim() && newTaskDate) {
       setAddingTask(true);
       try {
-        // Actually create the task first to get the real ID
-        const newTask = await createTask({
-          text: newTaskText,
-          description: newTaskDescription,
-          dueDate: Timestamp.fromDate(newTaskDate),
-          completed: false,
-          createdBy: user?.uid || '',
-          creatorName: user?.displayName || user?.name || user?.email || ''
-        });
+        // Create a new date object with the selected time
+        const startDate = new Date(newTaskDate);
+        startDate.setHours(startHour, startMinute, 0, 0);
 
-        // Add task to UI immediately (real-time listener will update this)
-        const taskWithId: Task = {
-          id: newTask.id,
-          text: newTaskText,
+        // Create end date with the end time
+        const endDate = new Date(newTaskDate);
+        endDate.setHours(endHour, endMinute, 0, 0);
+
+        // If end time is before start time, move end date to next day
+        if (endDate < startDate) {
+          endDate.setDate(endDate.getDate() + 1);
+        }
+
+        // Format time strings
+        const startTimeString = `${startHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
+        const endTimeString = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+
+        // Optimistic update - add task to UI immediately
+        const tempTask: Task = {
+          id: `temp_${Date.now()}`,
+          text: newTaskText.trim(),
           description: newTaskDescription,
-          dueDate: Timestamp.fromDate(newTaskDate),
+          dueDate: Timestamp.fromDate(startDate),
           completed: false,
           createdBy: user?.uid || '',
           creatorName: user?.displayName || user?.name || user?.email || '',
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
-          status: 'active'
+          status: 'active',
+          startTime: startTimeString,
+          endTime: endTimeString,
+          emoji: selectedEmoji // Include emoji in creation
         };
 
-        setTasks([taskWithId, ...tasks]);
+        setTasks(prevTasks => [...prevTasks, tempTask]);
+        const newTaskTitle = newTaskText.trim();
+        const newTaskEmoji = selectedEmoji; // Capture current emoji
+        setIsAddTaskModalVisible(false);
         setNewTaskText('');
         setNewTaskDescription('');
+        setSelectedEmoji('🎯'); // Reset to default
+        setStartHour(0); // Reset to 00
+        setStartMinute(0); // Reset to 00
+        setEndHour(0); // Reset to 00
+        setEndMinute(0); // Reset to 00
 
-        // The real-time listener will update the task list with the server version
+        // Actually create the task
+        await createTask({
+          text: newTaskTitle,
+          description: newTaskDescription,
+          dueDate: Timestamp.fromDate(startDate),
+          completed: false,
+          createdBy: user?.uid || '',
+          creatorName: user?.displayName || user?.name || user?.email || '',
+          startTime: startTimeString,
+          endTime: endTimeString,
+          emoji: newTaskEmoji // Include emoji in creation
+        });
+
+        // Replace temporary task with actual task (real-time listener will handle this)
       } catch (error) {
-        console.error('Error adding task:', error);
-        Alert.alert('Error', 'Failed to add task. Please try again.');
+        console.error('Error creating task:', error);
+        Alert.alert('Error', 'Failed to create task. Please try again.');
+        // Remove temporary task on error
+        setTasks(prevTasks => prevTasks.filter(t => !t.id.startsWith('temp_')));
       } finally {
         setAddingTask(false);
       }
@@ -545,12 +556,25 @@ const MainHomeScreen = () => {
     }
   };
 
-  const openTaskDetail = (taskItem: Task) => {
-    setSelectedTask(taskItem);
-    setEditTaskTitle(taskItem.text);      
-    setEditTaskDescription(taskItem.description || '');
-    // Initialize tempSelectedDate with the task's due date or current date
-    setTempSelectedDate(taskItem.dueDate?.toDate() || new Date());
+  const openAddTaskModal = () => {
+    const today = new Date();
+    setNewTaskText('');
+    setNewTaskDescription('');
+    setNewTaskDate(today);
+    setSelectedEmoji('🎯'); // Reset to default emoji
+    setStartHour(0); // Reset to 00
+    setStartMinute(0); // Reset to 00
+    setEndHour(0); // Reset to 00
+    setEndMinute(0); // Reset to 00
+    setIsAddTaskModalVisible(true);
+    
+    // Ensure time pickers reset to 00:00 with a small delay
+    setTimeout(() => {
+      setStartHour(0);
+      setStartMinute(0);
+      setEndHour(0);
+      setEndMinute(0);
+    }, 50);
   };
 
   const saveTaskEdits = async () => {
@@ -559,6 +583,10 @@ const MainHomeScreen = () => {
         // Use the tempSelectedDate if it has been updated, otherwise use the existing dueDate
         const finalDueDate = tempSelectedDate;
         
+        // Format time strings
+        const startTimeString = `${editStartHour.toString().padStart(2, '0')}:${editStartMinute.toString().padStart(2, '0')}`;
+        const endTimeString = `${editEndHour.toString().padStart(2, '0')}:${editEndMinute.toString().padStart(2, '0')}`;
+        
         // Optimistic update
         const updatedTasks = tasks.map(task =>
           task.id === selectedTask.id
@@ -566,7 +594,10 @@ const MainHomeScreen = () => {
                 ...task, 
                 text: editTaskTitle, 
                 description: editTaskDescription,
-                dueDate: Timestamp.fromDate(finalDueDate)
+                dueDate: Timestamp.fromDate(finalDueDate),
+                startTime: startTimeString,
+                endTime: endTimeString,
+                emoji: editTaskEmoji
               }
             : task
         );
@@ -576,7 +607,10 @@ const MainHomeScreen = () => {
         await updateTask(selectedTask.id, {
           text: editTaskTitle,
           description: editTaskDescription,
-          dueDate: Timestamp.fromDate(finalDueDate)
+          dueDate: Timestamp.fromDate(finalDueDate),
+          startTime: startTimeString,
+          endTime: endTimeString,
+          emoji: editTaskEmoji
         });
 
         // Close the modal
@@ -677,6 +711,36 @@ const MainHomeScreen = () => {
     }
   };
 
+  const openTaskDetail = (taskItem: Task) => {
+    setSelectedTask(taskItem);
+    setEditTaskTitle(taskItem.text);      
+    setEditTaskDescription(taskItem.description || '');
+    setEditTaskEmoji(taskItem.emoji || '🎯');
+    
+    // Parse start time if it exists
+    if (taskItem.startTime) {
+      const [hour, minute] = taskItem.startTime.split(':').map(Number);
+      setEditStartHour(hour || 0);
+      setEditStartMinute(minute || 0);
+    } else {
+      setEditStartHour(0);
+      setEditStartMinute(0);
+    }
+    
+    // Parse end time if it exists
+    if (taskItem.endTime) {
+      const [hour, minute] = taskItem.endTime.split(':').map(Number);
+      setEditEndHour(hour || 0);
+      setEditEndMinute(minute || 0);
+    } else {
+      setEditEndHour(0);
+      setEditEndMinute(0);
+    }
+    
+    // Initialize tempSelectedDate with the task's due date or current date
+    setTempSelectedDate(taskItem.dueDate?.toDate() || new Date());
+  };
+
   // Helper function to generate calendar days
   const getCalendarDays = (date: Date) => {
     const year = date.getFullYear();
@@ -707,6 +771,34 @@ const MainHomeScreen = () => {
 
     return days;
   };
+
+  // Memoized callbacks for time picker value changes
+  const handleStartHourChange = useCallback((value: number) => {
+    setStartHour(value);
+  }, []);
+
+  const handleStartMinuteChange = useCallback((value: number) => {
+    setStartMinute(value);
+  }, []);
+
+  const handleEndHourChange = useCallback((value: number) => {
+    setEndHour(value);
+  }, []);
+
+  const handleEndMinuteChange = useCallback((value: number) => {
+    setEndMinute(value);
+  }, []);
+  
+  // Reset time values when modal opens
+  useEffect(() => {
+    if (isAddTaskModalVisible) {
+      // Ensure time values are reset to 00:00 when modal opens
+      setStartHour(0);
+      setStartMinute(0);
+      setEndHour(0);
+      setEndMinute(0);
+    }
+  }, [isAddTaskModalVisible]);
 
   // Helper function to generate calendar days for heatmap (shows actual dates)
   const generateCalendarDaysForHeatmap = () => {
@@ -739,6 +831,209 @@ const MainHomeScreen = () => {
 
     return days;
   };
+
+  // Helper functions for time pickers
+  const getDayHours = () => {
+    const hours = [];
+    for (let i = 0; i < 24; i++) {
+      hours.push(i);
+    }
+    return hours;
+  };
+
+  const getMinutes = () => {
+    return [0, 15, 30, 45];
+  };
+
+  // TimePicker component - copied from CalendarScreen for exact match
+  const TimePicker = React.memo(({ 
+    items, 
+    selectedValue, 
+    onValueChange 
+  }: { 
+    items: number[]; 
+    selectedValue: number; 
+    onValueChange: (value: number) => void; 
+  }) => {
+    const itemHeight = 40;
+    const scrollViewRef = useRef<ScrollView>(null);
+    const isScrolling = useRef(false);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [scrollY, setScrollY] = useState(0);
+
+    // Scroll to selected item when it changes or on mount
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        if (scrollViewRef.current) {
+          const index = items.indexOf(selectedValue);
+          if (index !== -1) {
+            // Add padding at top to ensure proper centering (40px for the top padding)
+            const y = index * itemHeight;
+            scrollViewRef.current.scrollTo({ y, animated: false });
+          }
+        }
+      }, 150);
+      
+      return () => {
+        clearTimeout(timer);
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+      };
+    }, [selectedValue, items]);
+
+    const handleScroll = (event: any) => {
+      const y = event.nativeEvent.contentOffset.y;
+      setScrollY(y);
+      
+      if (!isScrolling.current) return;
+      
+      // Adjust for the top padding (40px)
+      const adjustedY = Math.max(0, y);
+      // Calculate index with proper rounding
+      const index = Math.round(adjustedY / itemHeight);
+      // Ensure index is within bounds
+      const clampedIndex = Math.min(Math.max(index, 0), items.length - 1);
+      
+      if (clampedIndex >= 0 && clampedIndex < items.length) {
+        // Clear any existing timeout
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        
+        // Update selection during scroll for visual feedback with a small delay
+        timeoutRef.current = setTimeout(() => {
+          if (items[clampedIndex] !== selectedValue) {
+            onValueChange(items[clampedIndex]);
+          }
+        }, 50);
+      }
+    };
+
+    const handleScrollBeginDrag = () => {
+      isScrolling.current = true;
+      // Clear any pending timeouts
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+
+    const handleMomentumScrollEnd = (event: any) => {
+      isScrolling.current = false;
+      
+      // Update scroll position
+      const y = event.nativeEvent.contentOffset.y;
+      setScrollY(y);
+      
+      // Calculate the final position
+      const adjustedY = Math.max(0, y);
+      
+      // Determine the closest item
+      const index = Math.round(adjustedY / itemHeight);
+      const clampedIndex = Math.min(Math.max(index, 0), items.length - 1);
+      
+      if (clampedIndex >= 0 && clampedIndex < items.length) {
+        // Scroll to the exact position to ensure proper alignment
+        const targetY = clampedIndex * itemHeight;
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ y: targetY, animated: true });
+        }
+        
+        // Update the value if it changed
+        if (items[clampedIndex] !== selectedValue) {
+          onValueChange(items[clampedIndex]);
+        }
+      }
+    };
+
+    // Function to determine if an item should have transparent text
+    const isItemTransparent = (index: number) => {
+      // Calculate the position of this item's top edge
+      // Each item is 40px tall, and there's 40px padding at the top
+      const itemTopPosition = (index * itemHeight) + 40;
+      
+      // If the item's top edge is above the scroll position, it's scrolled out
+      return itemTopPosition < scrollY;
+    };
+
+    return (
+      <View style={{
+        height: 120,
+        width: 50,
+        overflow: 'hidden',
+        position: 'relative',
+      }}>
+        {/* Center indicator line */}
+        <View style={{
+          position: 'absolute',
+          top: 40,
+          left: 0,
+          right: 0,
+          height: 40,
+          borderColor: colors.electricBlue,
+          borderWidth: 0,
+          borderTopWidth: 1,
+          borderBottomWidth: 1,
+          zIndex: 1,
+          pointerEvents: 'none',
+        }} />
+        
+        <ScrollView
+          ref={scrollViewRef}
+          showsVerticalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={itemHeight}
+          onScroll={handleScroll}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          scrollEventThrottle={16}
+        >
+          {/* Add padding at the top for the first item to be centered */}
+          <View style={{ height: 40 }} />
+          {items.map((item, index) => (
+            <View 
+              key={index} 
+              style={{
+                height: itemHeight,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{
+                fontSize: 16,
+                color: item === selectedValue ? colors.text : colors.textSecondary,
+                fontWeight: item === selectedValue ? '600' : 'normal',
+                opacity: isItemTransparent(index) ? 0 : 1,
+              }}>
+                {item.toString().padStart(2, '0')}
+              </Text>
+            </View>
+          ))}
+          {/* Add padding at the bottom for the last item to be centered */}
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </View>
+    );
+  }, (prevProps, nextProps) => {
+    // Custom comparison function to prevent unnecessary re-renders
+    return (
+      prevProps.selectedValue === nextProps.selectedValue &&
+      prevProps.items.length === nextProps.items.length &&
+      prevProps.items.every((item, index) => item === nextProps.items[index])
+    );
+  });
+
+  // Render time picker with proper selection handling
+  const renderTimePicker = useCallback((items: number[], selectedValue: number, onValueChange: (value: number) => void) => {
+    return (
+      <TimePicker 
+        items={items} 
+        selectedValue={selectedValue} 
+        onValueChange={onValueChange} 
+      />
+    );
+  }, []);
 
   const getStartOfWeek = (date: Date) => {
     const day = date.getDay();
@@ -824,9 +1119,9 @@ const MainHomeScreen = () => {
     setLoading(false);
   }
 
-  return (
-    <View style={[globalStyles.container, { paddingTop: insets.top }]}>
-      <View style={{ flex: 1 }}>
+  return ( 
+    <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+      <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
         {/* Animated Header */}
         <Animated.View
           style={[
@@ -834,26 +1129,18 @@ const MainHomeScreen = () => {
             {
               transform: [{ translateY: headerTranslateY }],
               opacity: headerOpacity,
+              backgroundColor: backgroundColor,
             }
           ]}
         >
           <View style={styles.headerContent}>
             <Image source={require('../../assets/images/heartlogo.png')} style={styles.headerLogo} />
-            <Text style={styles.headerText}>Habit Hearts</Text>
+            <Text style={[styles.headerText, { color: getTextColorForBackground(backgroundColor) }]}>Habit Hearts</Text>
             <TouchableOpacity
-              style={styles.headerAddButton}
-              onPress={() => {
-                const now = new Date();
-                // Set default time to 12:00 AM (midnight) for the same day
-                now.setHours(0, 0, 0, 0);
-                setNewTaskText('');
-                setNewTaskDescription('');
-                setNewTaskDate(now);
-                setSelectedDate(now);
-                setIsAddTaskModalVisible(true);
-              }}
+              style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary), shadowColor: getButtonColor(themePalette.primary) }]}
+              onPress={openAddTaskModal}
             >
-              <Icon name="add" size={responsiveFontSize(24)} color={colors.text} />
+              <Icon name="add" size={responsiveFontSize(20)} color={colors.textLight} />
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -1398,259 +1685,265 @@ const MainHomeScreen = () => {
         {/* Add Task Modal */}
         <Modal
           visible={isAddTaskModalVisible}
-          animationType="fade"
+          animationType="slide"
           transparent={true}
           onRequestClose={() => setIsAddTaskModalVisible(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContainer}>
-              <View style={styles.modalHeader}>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => setIsAddTaskModalVisible(false)}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalContainer}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                Add Task for {newTaskDate ? newTaskDate.toDateString() : ''}
+              </Text>
+              <TextInput
+                style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
+                placeholder="Task title"
+                value={newTaskText}
+                onChangeText={setNewTaskText}
+                autoFocus={true}
+                editable={!addingTask}
+              />
+
+              <TextInput
+                style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
+                placeholder="Task description (optional)"
+                value={newTaskDescription}
+                onChangeText={setNewTaskDescription}
+                multiline
+                textAlignVertical="top"
+              />
+
+              {/* Emoji Selection */}
+              <View style={styles.emojiSelectionContainer}>
+                <Text style={styles.emojiSelectionTitle}>Choose an Emoji:</Text>
+                <ScrollView
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.emojiScrollView}
+                  contentContainerStyle={styles.emojiScrollContent}
+                  horizontal={true}
                 >
-                  <Icon name="close" size={responsiveFontSize(24)} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Add New Task</Text>
+                  <View style={styles.emojiRowContainer}>
+                    <View style={styles.emojiRow}>
+                      {[
+                        // Row 1 - Events, Activities, Objects
+                        '🎯', '🎉', '🥳', '🎊', '🎂', '🎁', '🎈', '🎆', '🎇', '🧨',
+                        '✨', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎬', '🎭', '🎨',
+                        '🎪', '🎫', '🎟️', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
+                        '🎤', '🎧', '🎮', '🎲', '♟️', '⚽', '🏀', '🏈', '⚾', '🎾',
+                        '🏐', '🏉', '🎱', '🪀', '🏓', '🏸', '🥅', '⛳', '🪁', '🏹',
+                        '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '⛸️', '🥌', '🎿',
+                        '⛷️', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️',
+                        '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆'
+                      ].map((emoji, index) => (
+                        <TouchableOpacity
+                          key={`row1-${emoji}-${index}`}
+                          style={[
+                            styles.emojiOption,
+                            selectedEmoji === emoji && styles.selectedEmoji
+                          ]}
+                          onPress={() => setSelectedEmoji(emoji)}
+                        >
+                          <Text style={styles.emojiOptionText}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <View style={styles.emojiRow}>
+                      {[
+                        // Row 2 - Food, Nature, Faces, Hearts
+                        '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒',
+                        '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬',
+                        '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐',
+                        '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇',
+                        '🥓', '🥩', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪',
+                        '🥗', '🍿', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍮', '🎂',
+                        '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
+                        '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚'
+                      ].map((emoji, index) => (
+                        <TouchableOpacity
+                          key={`row2-${emoji}-${index}`}
+                          style={[
+                            styles.emojiOption,
+                            selectedEmoji === emoji && styles.selectedEmoji
+                          ]}
+                          onPress={() => setSelectedEmoji(emoji)}
+                        >
+                          <Text style={styles.emojiOptionText}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Time Selection */}
+              <View style={styles.timeSelectionContainer}>
+                <Text style={styles.timeSelectionTitle}>Select Time:</Text>
+                <View style={styles.timePickerHeaders}>
+                  <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>From:</Text>
+                  <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>To:</Text>
+                </View>
+                <View style={styles.timePickerLayout}>
+                  <View style={styles.timePickerGroup}>
+                    {renderTimePicker(getDayHours(), startHour, setStartHour)}
+                    <Text style={styles.timePickerSeparator}>:</Text>
+                    {renderTimePicker(getMinutes(), startMinute, setStartMinute)}
+                  </View>
+                  <View style={styles.timePickerGroup}>
+                    {renderTimePicker(getDayHours(), endHour, setEndHour)}
+                    <Text style={styles.timePickerSeparator}>:</Text>
+                    {renderTimePicker(getMinutes(), endMinute, setEndMinute)}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.modalButtons}>
                 <TouchableOpacity
-                  style={styles.saveButtonSmall}
+                  style={[globalStyles.button, globalStyles.outlineButton, styles.modalButton]}
+                  onPress={() => setIsAddTaskModalVisible(false)}
+                  disabled={addingTask}
+                >
+                  <Text style={[globalStyles.buttonText, globalStyles.outlineButtonText]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[globalStyles.button, styles.modalButton, addingTask && globalStyles.disabledButton, {backgroundColor: getButtonColor(themePalette.primary)}]}
                   onPress={() => {
                     if (newTaskText.trim()) {
                       addTask();
                       setIsAddTaskModalVisible(false);
                     }
                   }}
+                  disabled={!newTaskText.trim() || addingTask}
                 >
-                  <Text style={styles.saveButtonTextSmall}>Add</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.modalContent}>
-                <TextInput
-                  style={styles.editTitleInput}
-                  value={newTaskText}
-                  onChangeText={setNewTaskText}
-                  placeholder="Task title"
-                  multiline
-                  autoFocus
-                />
-
-                <TextInput
-                  style={styles.editDescriptionInput}
-                  value={newTaskDescription}
-                  onChangeText={setNewTaskDescription}
-                  placeholder="Task description (optional)"
-                  multiline
-                  textAlignVertical="top"
-                />
-
-                <View style={styles.datePickerContainer}>
-                  <TouchableOpacity
-                    style={styles.dateDisplay}
-                    onPress={() => {
-                      setShowAddTaskDatePicker(true);
-                    }}
-                  >
-                    <View style={styles.selectedDateTimeContainer}>
-                      <Text style={styles.selectedDateTimeText}>
-                        {`Selected due date & time:
-`} {newTaskDate.toLocaleDateString()} at {newTaskDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-                      </Text>
-                    </View>
-                    <Text style={styles.dateDisplayText}>
-
-                      {newTaskDate.toLocaleDateString()} at {newTaskDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Display selected date and time below the picker */}
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Add Task Date Picker Modal */}
-        <Modal
-          visible={showAddTaskDatePicker}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowAddTaskDatePicker(false)}
-        >
-          <View style={styles.pickerModalContainer}>
-            <View style={styles.pickerModalContent}>
-              <View style={styles.pickerHeader}>
-                <Text style={styles.pickerTitle}>Select Date</Text>
-                <TouchableOpacity
-                  onPress={() => setShowAddTaskDatePicker(false)}
-                  style={styles.pickerCloseButton}
-                >
-                  <Icon name="close" size={responsiveFontSize(20)} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Calendar View */}
-              <View style={styles.calendarContainer}>
-                <View style={styles.calendarHeader}>
-                  <TouchableOpacity onPress={() => {
-                    const newDate = new Date(newTaskDate);
-                    newDate.setMonth(newDate.getMonth() - 1);
-                    setNewTaskDate(newDate);
-                  }}>
-                    <Icon name="chevron-left" size={responsiveFontSize(24)} color={colors.text} />
-                  </TouchableOpacity>
-                  <Text style={styles.calendarMonthYear}>
-                    {newTaskDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </Text>
-                  <TouchableOpacity onPress={() => {
-                    const newDate = new Date(newTaskDate);
-                    newDate.setMonth(newDate.getMonth() + 1);
-                    setNewTaskDate(newDate);
-                  }}>
-                    <Icon name="chevron-right" size={responsiveFontSize(24)} color={colors.text} />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.calendarDaysHeader}>
-                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-                    <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
-                  ))}
-                </View>
-
-                <View style={styles.calendarGrid}>
-                  {getCalendarDays(newTaskDate).map((day, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.calendarDay,
-                        day.isCurrentMonth ? styles.currentMonthDay : styles.otherMonthDay,
-                        day.date && day.date.toDateString() === newTaskDate.toDateString() ? styles.selectedDay : null
-                      ]}
-                      onPress={() => {
-                        if (day.date) {
-                          setNewTaskDate(day.date);
-                        }
-                      }}
-                    >
-                      <Text style={[
-                        styles.calendarDayText,
-                        day.isCurrentMonth ? styles.currentMonthDayText : styles.otherMonthDayText,
-                        day.date && day.date.toDateString() === newTaskDate.toDateString() ? styles.selectedDayText : null
-                      ]}>
-                        {day.day}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.pickerActions}>
-                <TouchableOpacity
-                  style={styles.pickerCancelButton}
-                  onPress={() => setShowAddTaskDatePicker(false)}
-                >
-                  <Text style={styles.pickerCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.pickerConfirmButton}
-                  onPress={() => {
-                    // After selecting date, switch to time picker
-                    setShowAddTaskDatePicker(false);
-                    setShowAddTaskTimePicker(true);
-                  }}
-                >
-                  <Text style={styles.pickerConfirmText}>Next</Text>
+                  {addingTask ? (
+                    <ActivityIndicator color={colors.textLight} size="small" />
+                  ) : (
+                    <Text style={globalStyles.buttonText}>Add Task</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-        </Modal>
-
-        {/* Add Task Time Picker Modal */}
-        <Modal
-          visible={showAddTaskTimePicker}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowAddTaskTimePicker(false)}
-        >
-          <View style={styles.pickerModalContainer}>
-            <View style={styles.pickerModalContent}>
-              <View style={styles.pickerHeader}>
-                <Text style={styles.pickerTitle}>Select Time</Text>
-                <TouchableOpacity
-                  onPress={() => setShowAddTaskTimePicker(false)}
-                  style={styles.pickerCloseButton}
-                >
-                  <Icon name="close" size={responsiveFontSize(20)} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.datePickerContainer}>
-                <DatePicker
-                  date={newTaskDate}
-                  onDateChange={setNewTaskDate}
-                  mode="time"
-                  style={styles.datePicker}
-                />
-              </View>
-
-              <View style={styles.pickerActions}>
-                <TouchableOpacity
-                  style={styles.pickerCancelButton}
-                  onPress={() => setShowAddTaskTimePicker(false)}
-                >
-                  <Text style={styles.pickerCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.pickerConfirmButton}
-                  onPress={() => {
-                    setShowAddTaskTimePicker(false);
-                  }}
-                >
-                  <Text style={styles.pickerConfirmText}>Done</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* Task Detail Modal */}
         <Modal
           visible={!!selectedTask}
-          animationType="fade"
+          animationType="slide"
           transparent={true}
           onRequestClose={() => setSelectedTask(null)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContainer}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Edit Task</Text>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => setSelectedTask(null)}
-                >
-                  <Icon name="close" size={responsiveFontSize(24)} color="#000000" />
-                </TouchableOpacity>
-              </View>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalContainer}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                Edit Event
+              </Text>
 
               {selectedTask && (
-                <View style={styles.modalContent}>
+                <>
                   <TextInput
-                    style={styles.editTitleInput}
+                    style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
+                    placeholder="Task title"
                     value={editTaskTitle}
                     onChangeText={setEditTaskTitle}
-                    placeholder="Task title"
-                    multiline
+                    autoFocus={true}
                   />
 
                   <TextInput
-                    style={styles.editDescriptionInput}
+                    style={[globalStyles.input, { marginBottom: verticalScale(8), marginHorizontal: moderateScale(6) }]}
+                    placeholder="Task description"
                     value={editTaskDescription}
                     onChangeText={setEditTaskDescription}
-                    placeholder="Task description"
                     multiline
                     textAlignVertical="top"
                   />
+
+                  {/* Emoji Selection */}
+                  <View style={styles.emojiSelectionContainer}>
+                    <Text style={styles.emojiSelectionTitle}>Choose an Emoji:</Text>
+                    <ScrollView
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.emojiScrollView}
+                      contentContainerStyle={styles.emojiScrollContent}
+                      horizontal={true}
+                    >
+                      <View style={styles.emojiRowContainer}>
+                        <View style={styles.emojiRow}>
+                          {[
+                            // Row 1 - Events, Activities, Objects
+                            '🎯', '🎉', '🥳', '🎊', '🎂', '🎁', '🎈', '🎆', '🎇', '🧨',
+                            '✨', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎬', '🎭', '🎨',
+                            '🎪', '🎫', '🎟️', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
+                            '🎤', '🎧', '🎮', '🎲', '♟️', '⚽', '🏀', '🏈', '⚾', '🎾',
+                            '🏐', '🏉', '🎱', '🪀', '🏓', '🏸', '🥅', '⛳', '🪁', '🏹',
+                            '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '⛸️', '🥌', '🎿',
+                            '⛷️', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️',
+                            '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆'
+                          ].map((emoji, index) => (
+                            <TouchableOpacity
+                              key={`edit-row1-${emoji}-${index}`}
+                              style={[
+                                styles.emojiOption,
+                                editTaskEmoji === emoji && styles.selectedEmoji
+                              ]}
+                              onPress={() => setEditTaskEmoji(emoji)}
+                            >
+                              <Text style={styles.emojiOptionText}>{emoji}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <View style={styles.emojiRow}>
+                          {[
+                            // Row 2 - Food, Nature, Faces, Hearts
+                            '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒',
+                            '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬',
+                            '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐',
+                            '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇',
+                            '🥓', '🥩', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪',
+                            '🥗', '🍿', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍮', '🎂',
+                            '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
+                            '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚'
+                          ].map((emoji, index) => (
+                            <TouchableOpacity
+                              key={`edit-row2-${emoji}-${index}`}
+                              style={[
+                                styles.emojiOption,
+                                editTaskEmoji === emoji && styles.selectedEmoji
+                              ]}
+                              onPress={() => setEditTaskEmoji(emoji)}
+                            >
+                              <Text style={styles.emojiOptionText}>{emoji}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    </ScrollView>
+                  </View>
+
+                  {/* Time Selection */}
+                  <View style={styles.timeSelectionContainer}>
+                    <Text style={styles.timeSelectionTitle}>Select Time:</Text>
+                    <View style={styles.timePickerHeaders}>
+                      <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>From:</Text>
+                      <Text style={[styles.timePickerLabel, styles.timePickerHeader]}>To:</Text>
+                    </View>
+                    <View style={styles.timePickerLayout}>
+                      <View style={styles.timePickerGroup}>
+                        {renderTimePicker(getDayHours(), editStartHour, (value) => setEditStartHour(value))}
+                        <Text style={styles.timePickerSeparator}>:</Text>
+                        {renderTimePicker(getMinutes(), editStartMinute, (value) => setEditStartMinute(value))}
+                      </View>
+                      <View style={styles.timePickerGroup}>
+                        {renderTimePicker(getDayHours(), editEndHour, (value) => setEditEndHour(value))}
+                        <Text style={styles.timePickerSeparator}>:</Text>
+                        {renderTimePicker(getMinutes(), editEndMinute, (value) => setEditEndMinute(value))}
+                      </View>
+                    </View>
+                  </View>
 
                   <TouchableOpacity 
                     style={styles.dateDisplay}
@@ -1667,31 +1960,24 @@ const MainHomeScreen = () => {
                     </View>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={styles.dateDisplay}
-                    onPress={() => {
-                      setTempSelectedDate(selectedTask.dueDate?.toDate() || new Date());
-                      setShowTaskDetailTimePicker(true);
-                    }}
-                  >
-                    <View style={styles.taskDetailTimeContent}>
-                      <Icon name="schedule" size={responsiveFontSize(18)} color={colors.electricBlue} />
-                      <Text style={styles.dateDisplayText}>
-                        {selectedTask.dueDate ? selectedTask.dueDate.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Set time'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={saveTaskEdits}
-                  >
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
-                  </TouchableOpacity>
-                </View>
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={[globalStyles.button, globalStyles.outlineButton, styles.modalButton]}
+                      onPress={() => setSelectedTask(null)}
+                    >
+                      <Text style={[globalStyles.buttonText, globalStyles.outlineButtonText]}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[globalStyles.button, styles.modalButton, {backgroundColor: getButtonColor(themePalette.primary)}]}
+                      onPress={saveTaskEdits}
+                    >
+                      <Text style={globalStyles.buttonText}>Update Event</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
               )}
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* Task Detail Date Picker Modal */}
@@ -1786,56 +2072,8 @@ const MainHomeScreen = () => {
             </View>
           </View>
         </Modal>
-
-        {/* Task Detail Time Picker Modal */}
-        <Modal
-          visible={showTaskDetailTimePicker}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowTaskDetailTimePicker(false)}
-        >
-          <View style={styles.pickerModalContainer}>
-            <View style={styles.pickerModalContent}>
-              <View style={styles.pickerHeader}>
-                <Text style={styles.pickerTitle}>Select Time</Text>
-                <TouchableOpacity
-                  onPress={() => setShowTaskDetailTimePicker(false)}
-                  style={styles.pickerCloseButton}
-                >
-                  <Icon name="close" size={responsiveFontSize(20)} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.datePickerContainer}>
-                <DatePicker
-                  date={tempSelectedDate}
-                  onDateChange={setTempSelectedDate}
-                  mode="time"
-                  style={styles.datePicker}
-                />
-              </View>
-
-              <View style={styles.pickerActions}>
-                <TouchableOpacity
-                  style={styles.pickerCancelButton}
-                  onPress={() => setShowTaskDetailTimePicker(false)}
-                >
-                  <Text style={styles.pickerCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.pickerConfirmButton}
-                  onPress={() => {
-                    setShowTaskDetailTimePicker(false);
-                  }}
-                >
-                  <Text style={styles.pickerConfirmText}>Done</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -1844,8 +2082,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContentContainer: {
-    paddingTop: verticalScale(60),
-    minHeight: scale(1000),
+    paddingTop: verticalScale(76),
+    flexGrow: 1,
   },
   taskListContainer: {
     paddingHorizontal: scale(16),
@@ -1870,22 +2108,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
   },
   headerAddButton: {
-    padding: scale(10),
-    backgroundColor: colors.electricBlue,
+    padding: scale(8),
     borderRadius: moderateScale(12),
-    // Flat surface with no shadow
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    minWidth: verticalScale(36),
+    minHeight: verticalScale(36),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: verticalScale(5.5),
   },
   headerLogo: {
     width: verticalScale(30),
     height: verticalScale(30),
     borderRadius: verticalScale(15),
-    marginLeft: scale(16),
+    marginVertical: verticalScale(2),
   },
   headerText: {
     color: colors.text,
     fontSize: responsiveFontSize(18),
     fontWeight: '600',
     paddingHorizontal: scale(12),
+    flex: 1,
+    textAlign: 'center',
   },
   heatmapContainer: {
     paddingHorizontal: scale(16),
@@ -2317,12 +2567,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: moderateScale(16),
-    width: '90%',
-    maxHeight: '85%',
-    borderWidth: 1,
-    borderColor: colors.border,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: moderateScale(12),
   },
   // Date/Time Picker Styles
   pickerModalContainer: {
@@ -2471,12 +2720,32 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   modalTitle: {
-    fontSize: responsiveFontSize(18),
+    fontSize: responsiveFontSize(17),
     fontWeight: '600',
+    marginBottom: verticalScale(12),
+    textAlign: 'center',
     color: colors.text,
   },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: verticalScale(12),
+    paddingHorizontal: moderateScale(6),
+  },
+  modalButton: {
+    flex: 1,
+    marginHorizontal: scale(6),
+    paddingVertical: verticalScale(8),
+    minHeight: 0,
+  },
   modalContent: {
-    padding: scale(16),
+    backgroundColor: colors.surface,
+    borderRadius: moderateScale(12),
+    padding: moderateScale(12),
+    width: '100%',
+    maxWidth: 360,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   editTitleInput: {
     fontSize: responsiveFontSize(18),
@@ -2498,6 +2767,107 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     marginBottom: verticalScale(16),
+  },
+  // Emoji Selection Styles
+  emojiSelectionContainer: {
+  },
+  emojiSelectionTitle: {
+    fontSize: responsiveFontSize(15),
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  emojiScrollView: {
+    maxHeight: verticalScale(140), // Increased height for 2 rows with more emojis
+  },
+  emojiScrollContent: {
+  },
+  emojiScrollWrapper: {
+    position: 'relative',
+  },
+  emojiRowContainer: {
+    flexDirection: 'column',
+  },
+  emojiRow: {
+    flexDirection: 'row',
+    marginVertical: verticalScale(4),
+  },
+  emojiOption: {
+    width: scale(40),
+    height: scale(40),
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: moderateScale(10),
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    margin: scale(2),
+  },
+  selectedEmoji: {
+    backgroundColor: colors.electricBlueLight,
+    borderColor: colors.electricBlue,
+  },
+  emojiOptionText: {
+    fontSize: responsiveFontSize(20),
+  },
+  // Time Selection Styles
+  timeSelectionContainer: {
+    paddingHorizontal: moderateScale(8),
+    width: '100%',
+    paddingTop: verticalScale(4),
+  },
+  timeSelectionTitle: {
+    fontSize: responsiveFontSize(15),
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: verticalScale(6),
+    textAlign: 'center',
+  },
+  timePickerHeaders: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: scale(20),
+    marginBottom: -verticalScale(20),
+    zIndex: 100,
+    position: 'relative',
+    height: verticalScale(30),
+  },
+  timePickerHeader: {
+    flex: 1,
+    textAlign: 'center',
+    backgroundColor: '#f8f8f8ff',
+    paddingVertical: verticalScale(4),
+    marginHorizontal: moderateScale(14),
+    borderRadius: moderateScale(8),
+    minWidth: scale(80),
+    zIndex: 100,
+    position: 'relative',
+  },
+  timePickerLayout: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: moderateScale(20),
+    marginTop: verticalScale(0),
+  },
+  timePickerGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: verticalScale(90),
+  },
+  timePickerSeparator: {
+    fontSize: responsiveFontSize(20),
+    color: colors.text,
+    marginHorizontal: scale(2),
+    fontWeight: '600',
+    lineHeight: responsiveFontSize(20),
+    textAlignVertical: 'center',
+    alignSelf: 'center',
+  },
+  timePickerLabel: {
+    fontSize: responsiveFontSize(14),
+    color: colors.text,
+    fontWeight: '500',
   },
   dateDisplay: {
     backgroundColor: colors.surface,
@@ -2532,30 +2902,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  taskDetailTimeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveButtonText: {
-    color: colors.textLight,
-    fontSize: responsiveFontSize(16),
-    fontWeight: '600',
-  },
-  saveButtonSmall: {
-    backgroundColor: colors.electricBlue,
-    borderRadius: moderateScale(8),
-    paddingHorizontal: scale(16),
-    paddingVertical: verticalScale(8),
-  },
-  saveButtonTextSmall: {
-    color: colors.textLight,
-    fontSize: responsiveFontSize(14),
-    fontWeight: '600',
-  },
-  closeButton: {
-    padding: scale(4),
   },
 });
 

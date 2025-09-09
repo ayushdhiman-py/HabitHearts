@@ -1,31 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Image, Platform } from 'react-native';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../../firebaseConfig';
 import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, widthPercentage } from '../utils/responsive';
 import Slideshow from '../components/Slideshow';
+import { useStatusBar } from '../context/StatusBarContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Import logos
 const heartLogo = require('../../assets/images/heartlogotransparent.png');
 const googleLogo = require('../../assets/images/google-logo.png');
 
-// IMPORTANT: You must get this from your Google Cloud project
-GoogleSignin.configure({
-  webClientId: '545998989450-ierli7eqdnkr5slmsm3vl2dcke96a7rn.apps.googleusercontent.com',
-  offlineAccess: true,
-});
-
+// Memoize the component to prevent unnecessary re-renders
 const LoginScreen = () => {
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [isSignInReady, setIsSignInReady] = useState(false);
+  const { setStatusBar, screenBackgroundColor, themePalette } = useStatusBar();
 
   // Check for Play Services on mount to "warm up" the module and prevent "activity is null"
   useEffect(() => {
+    // IMPORTANT: You must get this from your Google Cloud project
+    GoogleSignin.configure({
+      webClientId: '545998989450-ierli7eqdnkr5slmsm3vl2dcke96a7rn.apps.googleusercontent.com',
+      offlineAccess: true,
+    });
+    
     const checkPlayServices = async () => {
       try {
         await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
@@ -38,6 +43,14 @@ const LoginScreen = () => {
     };
     checkPlayServices();
   }, []);
+
+  // Set status bar for login screen
+  useFocusEffect(
+    useCallback(() => {
+      // Set status bar to match the app's primary theme
+      setStatusBar(themePalette.statusBar, 'light-content');
+    }, [setStatusBar, themePalette.statusBar])
+  );
 
   const signIn = async () => {
     if (!isSignInReady) {
@@ -92,7 +105,7 @@ const LoginScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: screenBackgroundColor }]}>
       <Slideshow />
       <View style={styles.overlay} />
       <View style={styles.content}>
@@ -229,6 +242,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: verticalScale(24),
   },
-});
+  });
 
 export default LoginScreen;

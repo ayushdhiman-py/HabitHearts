@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet, Dimensions } from 'react-native';
+import Animated, { useSharedValue, withTiming, Easing, runOnJS } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
 
-// Import all images from the assets/images folder
 const images = [
   require('../../assets/images/couple_travel.jpg'),
   require('../../assets/images/couple_future.jpg'),
@@ -13,77 +13,34 @@ const images = [
 
 const Slideshow = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [nextIndex, setNextIndex] = useState(1);
-  const [opacity, setOpacity] = useState(0);
-  const fadeIntervalRef = useRef<number | null>(null);
-  const transitionIntervalRef = useRef<number | null>(null);
+  const opacity = useSharedValue(0);
 
-  // Preload all images
   useEffect(() => {
-    images.forEach((image) => {
+    images.forEach(image => {
       if (image && typeof image === 'number') {
         Image.prefetch(Image.resolveAssetSource(image).uri);
       }
     });
   }, []);
 
-  // Handle the crossfade transition
   useEffect(() => {
-    const startTransition = () => {
-      // Clear any existing fade interval
-      if (fadeIntervalRef.current) {
-        clearInterval(fadeIntervalRef.current);
-      }
+    opacity.value = withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) });
 
-      // Set up the next image before starting fade
-      setCurrentIndex(prevIndex => {
-        const newIndex = (prevIndex + 1) % images.length;
-        setNextIndex((newIndex + 1) % images.length);
-        // Start with opacity 0 for the next image
-        setOpacity(0);
-        return newIndex;
-      });
-
-      let fadeProgress = 0;
-      const fadeDuration = 1000; // 1 second fade
-      const interval = 16; // ~60fps
-
-      fadeIntervalRef.current = setInterval(() => {
-        fadeProgress += interval;
-        const newOpacity = Math.min(fadeProgress / fadeDuration, 1);
-        setOpacity(newOpacity);
-
-        if (fadeProgress >= fadeDuration) {
-          clearInterval(fadeIntervalRef.current!);
-          fadeIntervalRef.current = null;
+    const timeout = setTimeout(() => {
+      opacity.value = withTiming(0, { duration: 1000, easing: Easing.inOut(Easing.ease) }, (isFinished) => {
+        if (isFinished) {
+          runOnJS(setCurrentIndex)((prevIndex) => (prevIndex + 1) % images.length);
         }
-      }, interval);
-    };
+      });
+    }, 4000);
 
-    transitionIntervalRef.current = setInterval(startTransition, 3000); // Change image every 3 seconds
-
-    return () => {
-      if (transitionIntervalRef.current) {
-        clearInterval(transitionIntervalRef.current);
-      }
-      if (fadeIntervalRef.current) {
-        clearInterval(fadeIntervalRef.current);
-      }
-    };
-  }, []); // Run only once on mount
+    return () => clearTimeout(timeout);
+  }, [currentIndex, opacity]);
 
   return (
     <View style={styles.container}>
-      {/* Current image (background) */}
-      <Image
+      <Animated.Image
         source={images[currentIndex]}
-        style={styles.image}
-        resizeMode="cover"
-      />
-      
-      {/* Next image (fades in on top) */}
-      <Image
-        source={images[nextIndex]}
         style={[styles.image, { opacity }]}
         resizeMode="cover"
       />
@@ -104,7 +61,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'absolute',
-  }
+  },
 });
 
 export default Slideshow;
