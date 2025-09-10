@@ -1,40 +1,22 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Modal,
-  TouchableOpacity,
-  Alert,
-  StatusBar,
-  Dimensions,
-  TextInput,
-  BackHandler,
-  Platform,
-  Animated,
-  Image,
-  InteractionManager,
-  KeyboardAvoidingView,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, InteractionManager } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, CalendarEvent, subscribeToCalendarEventsForUserAndLinked } from '../services/calendarService';
-import { getLinkedUsers, User as UserServiceUser } from '../services/userService';
-import { getGoalsForUserAndLinked, subscribeToGoalsForUserAndLinked } from '../services/goalService';
+import { getLinkedUsers } from '../services/userService';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
 import { useStatusBar } from '../context/StatusBarContext';
 import { getTextColorForBackground } from '../utils/colorUtils';
 import { getButtonColor } from '../utils/buttonUtils';
+import SafeStatusBar from '../components/SafeStatusBar';
 
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { Timestamp } from 'firebase/firestore';
-import { swipeableManager } from '../utils/swipeableManager';
-import EnhancedEventItem from '../components/home/EnhancedEventItem';
+import { CalendarEvent, createCalendarEvent, deleteCalendarEvent, subscribeToCalendarEventsForUserAndLinked, updateCalendarEvent } from '../services/calendarService';
 import notificationService from '../services/notificationService';
+import EnhancedEventItem from '../components/home/EnhancedEventItem';
+import { TextInput } from 'react-native-gesture-handler';
 
 interface LinkedUser {
   uid: string;
@@ -56,6 +38,7 @@ interface AuthUser {
 
 // Memoize the component to prevent unnecessary re-renders
 const CalendarScreen = () => {
+  console.log(`[Perf] CalendarScreen render start: ${Date.now()}`);
   const { screenBackgroundColor, backgroundColor, themePalette } = useStatusBar();
   const { user } = useAuth() as { user: AuthUser };
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -80,6 +63,17 @@ const CalendarScreen = () => {
   const [editEndHour, setEditEndHour] = useState(0);
   const [editEndMinute, setEditEndMinute] = useState(0);
   const [editModalVisible, setEditModalVisible] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      InteractionManager.runAfterInteractions(() => {
+        console.log(`[Perf] CalendarScreen interactive: ${Date.now()}`);
+      });
+      return () => {
+        console.log(`[Perf] CalendarScreen blur/navigate away: ${Date.now()}`);
+      };
+    }, [])
+  );
 
   // Define emoji arrays as constants to prevent recreation on each render
   const row1Emojis = [
@@ -1001,6 +995,7 @@ const CalendarScreen = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+      <SafeStatusBar />
       <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
         <View style={[styles.header, { backgroundColor: backgroundColor }]}>
           <Text style={[styles.title, { color: getTextColorForBackground(backgroundColor) }]}>Your Events</Text>
@@ -1304,6 +1299,7 @@ const CalendarScreen = () => {
             </View>
           </KeyboardAvoidingView>
         </Modal>
+        {(() => { console.log(`[Perf] CalendarScreen render end: ${Date.now()}`); return null; })()}
       </View>
     </SafeAreaView>
   );

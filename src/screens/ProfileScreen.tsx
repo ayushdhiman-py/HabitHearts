@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, Image, ActivityIndicator, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { useStatusBar } from '../context/StatusBarContext';
-import { useTheme } from '../context/ThemeContext';
-import { generateUniqueCode, linkUsers, getLinkedUsers, User, createUserDocument, getUserByUniqueCode } from '../services/userService';
-import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage } from '../utils/responsive';
+import { createUserDocument, getLinkedUsers, getUserByUniqueCode, linkUsers } from '../services/userService';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
+import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
+import { useStatusBar } from '../context/StatusBarContext';
 import { getTextColorForBackground } from '../utils/colorUtils';
-import { getButtonColor } from '../utils/buttonUtils';
+import SafeStatusBar from '../components/SafeStatusBar';
+
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext';
+import { getButtonColor } from '../utils/buttonUtils';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { FlatList } from 'react-native-gesture-handler';
 
 interface LinkedUser {
   uid: string;
@@ -35,7 +39,8 @@ const THEME_COLORS = [
 
 // Memoize the component to prevent unnecessary re-renders
 const ProfileScreen = () => {
-  const { user, logout } = useAuth() as { user: User | null; logout: () => void };
+  console.log(`[Perf] ProfileScreen render start: ${Date.now()}`);
+  const { user, logout } = useAuth();
   const [uniqueCode, setUniqueCode] = useState('');
   const [linkCode, setLinkCode] = useState('');
   const [linkedUsers, setLinkedUsers] = useState<LinkedUser[]>([]);
@@ -68,6 +73,20 @@ const ProfileScreen = () => {
     initializeUser();
   }, [user]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchLinkedUsers();
+      }
+      InteractionManager.runAfterInteractions(() => {
+        console.log(`[Perf] ProfileScreen interactive: ${Date.now()}`);
+      });
+      return () => {
+        console.log(`[Perf] ProfileScreen blur/navigate away: ${Date.now()}`);
+      };
+    }, [user])
+  );
+
   const fetchLinkedUsers = async () => {
     try {
       if (user) {
@@ -91,6 +110,11 @@ const ProfileScreen = () => {
   const handleLinkUser = async () => {
     if (!linkCode.trim()) {
       Alert.alert('Error', 'Please enter a valid code');
+      return;
+    }
+
+    if (!user) {
+      Alert.alert('Error', 'User not found');
       return;
     }
 
@@ -118,7 +142,7 @@ const ProfileScreen = () => {
       }
 
       // Link users
-      await linkUsers(user!.uid, otherUser.uid);
+      await linkUsers(user.uid, otherUser.uid);
       
       // Refresh linked users for both users
       await fetchLinkedUsers();
@@ -150,11 +174,13 @@ const ProfileScreen = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+      <SafeStatusBar />
       <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
         <View style={[styles.header, { backgroundColor: backgroundColor }]}>
           <Text style={[styles.title, { color: getTextColorForBackground(backgroundColor) }]}>Profile</Text>
           <TouchableOpacity
             style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary) }]}
+            onPress={() => Alert.alert('Feature Coming Soon', 'This feature will be available in a future update.')}
           >
             <Icon name="add" size={responsiveFontSize(24)} color={colors.textLight} />
           </TouchableOpacity>
@@ -270,6 +296,7 @@ const ProfileScreen = () => {
             </>
           )}
         </ScrollView>
+      {(() => { console.log(`[Perf] ProfileScreen render end: ${Date.now()}`); return null; })()}
       </View>
     </SafeAreaView>
   );

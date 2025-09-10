@@ -1,4 +1,4 @@
-import React, { memo, useRef, useEffect } from 'react';
+import React, { memo, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -109,7 +109,7 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
     }
   };
 
-  const renderRightActions = (progress: Animated.AnimatedInterpolation<number>) => {
+  const renderRightActions = useCallback((progress: Animated.AnimatedInterpolation<number>) => {
     const trans = progress.interpolate({
       inputRange: [0, 1],
       outputRange: [75, 0],
@@ -124,6 +124,7 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
               swipeableRef.current?.close();
               onOpenTaskDetail(item);
             }}
+            activeOpacity={0.7}
           >
             <Icon name="edit" size={responsiveFontSize(20)} color={colors.text} />
           </TouchableOpacity>
@@ -142,13 +143,14 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
                 ]
               );
             }}
+            activeOpacity={0.7}
           >
             <Icon name="delete" size={responsiveFontSize(20)} color={colors.text} />
           </TouchableOpacity>
         </Animated.View>
       </View>
     );
-  };
+  }, [item, onOpenTaskDetail, onDeleteTask]);
 
   const priorityColor = getTaskPriorityColor();
   const timeRemaining = getTimeRemaining(item.dueDate);
@@ -167,6 +169,7 @@ const EnhancedTaskItem: React.FC<EnhancedTaskItemProps> = ({
         style={styles.taskItem}
         onPress={() => onToggleTask(item)}
         activeOpacity={0.7}
+        delayPressIn={100}
       >
         <View style={styles.taskContent}>
           <View style={styles.checkboxContainer}>

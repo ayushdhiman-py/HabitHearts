@@ -6,11 +6,16 @@ import LoginScreen from '../screens/LoginScreen';
 // Lazy load the BottomTabNavigator for better performance
 const BottomTabNavigator = React.lazy(() => import('./BottomTabNavigator'));
 
+// Import the fade transition component
+import { FadeTransition } from './ScreenTransitions';
+
 // Create a loading component for lazy-loaded screens
 const LazyBottomTabNavigator = (props: any) => {
   return (
     <React.Suspense fallback={null}>
-      <BottomTabNavigator {...props} />
+      <FadeTransition>
+        <BottomTabNavigator {...props} />
+      </FadeTransition>
     </React.Suspense>
   );
 };
@@ -24,9 +29,9 @@ const AppNavigator = () => {
   const screenOptions = useMemo<NativeStackNavigationOptions>(() => ({
     headerShown: false,
     contentStyle: { flex: 1 }, // Ensure full height
-    // Optimize transitions
-    animation: 'fade_from_bottom',
-    animationDuration: 200,
+    // Use fade transition for stack navigator
+    animation: 'fade',
+    animationDuration: 300,
   }), []);
 
   return (
@@ -38,8 +43,8 @@ const AppNavigator = () => {
             component={LazyBottomTabNavigator}
             options={{ 
               contentStyle: { flex: 1 },
-              // Optimize tab navigator transitions
-              animation: 'none'
+              // Use fade transition for tab navigator screens
+              animation: 'fade'
             }}
           />
         ) : (
@@ -47,8 +52,8 @@ const AppNavigator = () => {
             name="Login" 
             component={LoginScreen}
             options={{
-              animation: 'slide_from_right',
-              animationDuration: 200,
+              animation: 'fade',
+              animationDuration: 300,
             }}
           />
         )}

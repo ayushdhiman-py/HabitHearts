@@ -1,0 +1,5 @@
+            </Animated.ScrollView>
+          </>
+        }
+
+        {/* Task Modal */}

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet, Dimensions } from 'react-native';
-import Animated, { useSharedValue, withTiming, Easing, runOnJS } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
 
@@ -13,34 +12,69 @@ const images = [
 
 const Slideshow = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const opacity = useSharedValue(0);
+  const [nextIndex, setNextIndex] = useState(1);
+  const [opacity, setOpacity] = useState(0);
 
   useEffect(() => {
-    images.forEach(image => {
+    // Preload all images
+    images.forEach((image) => {
       if (image && typeof image === 'number') {
-        Image.prefetch(Image.resolveAssetSource(image).uri);
+        Image.prefetch(Image.resolveAssetSource(image).uri).catch(error => {
+          console.warn('Failed to preload image:', error);
+        });
       }
     });
   }, []);
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) });
+    let transitionInterval: ReturnType<typeof setInterval>;
+    let fadeInterval: ReturnType<typeof setInterval> | null = null;
 
-    const timeout = setTimeout(() => {
-      opacity.value = withTiming(0, { duration: 1000, easing: Easing.inOut(Easing.ease) }, (isFinished) => {
-        if (isFinished) {
-          runOnJS(setCurrentIndex)((prevIndex) => (prevIndex + 1) % images.length);
+    const startTransition = () => {
+      let fadeProgress = 0;
+      const fadeDuration = 1000; // 1 second fade (faster)
+      const interval = 16; // ~60fps
+
+      fadeInterval = setInterval(() => {
+        fadeProgress += interval;
+        const newOpacity = Math.min(fadeProgress / fadeDuration, 1);
+        setOpacity(newOpacity);
+
+        if (fadeProgress >= fadeDuration) {
+          if (fadeInterval) clearInterval(fadeInterval);
+          fadeInterval = null;
+          // Update indices after fade completes
+          const newIndex = (currentIndex + 1) % images.length;
+          const newNextIndex = (newIndex + 1) % images.length;
+          setCurrentIndex(newIndex);
+          setNextIndex(newNextIndex);
+          setOpacity(0); // Reset opacity for next transition
         }
-      });
-    }, 4000);
+      }, interval);
+    };
 
-    return () => clearTimeout(timeout);
-  }, [currentIndex, opacity]);
+    transitionInterval = setInterval(() => {
+      startTransition();
+    }, 2000); // Change image every 2 seconds (1s display + 1s fade)
+
+    return () => {
+      clearInterval(transitionInterval);
+      if (fadeInterval) clearInterval(fadeInterval);
+    };
+  }, [currentIndex]);
 
   return (
     <View style={styles.container}>
-      <Animated.Image
+      {/* Current image (background) */}
+      <Image
         source={images[currentIndex]}
+        style={styles.image}
+        resizeMode="cover"
+      />
+      
+      {/* Next image (fades in on top) */}
+      <Image
+        source={images[nextIndex]}
         style={[styles.image, { opacity }]}
         resizeMode="cover"
       />
@@ -61,7 +95,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'absolute',
-  },
+  }
 });
 
 export default Slideshow;

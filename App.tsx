@@ -7,6 +7,7 @@ import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBarProvider } from './src/context/StatusBarContext';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { HomeDataProvider } from './src/context/HomeDataContext';
 
 const App = () => {
   useEffect(() => {
@@ -29,7 +30,9 @@ const App = () => {
         <ThemeProvider>
           <StatusBarProvider>
             <AuthProvider>
-              <AppNavigator />
+              <HomeDataProvider>
+                <AppNavigator />
+              </HomeDataProvider>
             </AuthProvider>
           </StatusBarProvider>
         </ThemeProvider>

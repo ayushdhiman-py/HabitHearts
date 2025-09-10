@@ -1,11 +1,14 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useStatusBar } from '../context/StatusBarContext';
+import colors from '../theme/colors';
+import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, moderateScale } from '../utils/responsive';
+import { useStatusBar } from '../context/StatusBarContext';
 import { getTextColorForBackground } from '../utils/colorUtils';
 import { getButtonColor } from '../utils/buttonUtils';
-import colors from '../theme/colors';
+import SafeStatusBar from '../components/SafeStatusBar';
+
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 // Memoize the component to prevent unnecessary re-renders
@@ -24,11 +27,12 @@ const TestingScreen = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+      <SafeStatusBar />
       <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
         <View style={[styles.header, { backgroundColor: backgroundColor }]}>
           <Text style={[styles.title, { color: getTextColorForBackground(backgroundColor) }]}>Testing Screen</Text>
           <TouchableOpacity
-            style={[styles.headerAddButton, { backgroundColor: getButtonColor(backgroundColor) }]}
+            style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary) }]}
             onPress={openAddEventModal}
           >
             <Icon name="add" size={responsiveFontSize(24)} color={colors.textLight} />
@@ -44,7 +48,7 @@ const TestingScreen = () => {
             <Text style={styles.featureDescription}>
               This screen uses the same status bar configuration as the Calendar screen:
             </Text>
-            <Text style={styles.featureItem}>• Background: {colors.surface}</Text>
+            <Text style={styles.featureItem}>• Background: {backgroundColor}</Text>
             <Text style={styles.featureItem}>• Text Style: dark-content</Text>
           </View>
         </View>

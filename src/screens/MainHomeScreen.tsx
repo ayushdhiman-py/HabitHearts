@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   Modal,
   TouchableOpacity,
   Alert,
@@ -19,16 +20,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { subscribeToTasksForUserAndLinked, createTask, updateTask, deleteTask, toggleTaskCompletion, Task } from '../services/taskService';
-import { getLinkedUsers } from '../services/userService';
-import { subscribeToGoalsForUserAndLinked } from '../services/goalService';
-import { getGoalsProgress, updateGoalProgress, GoalProgress } from '../services/goalProgressService';
+import { createTask, updateTask, deleteTask, toggleTaskCompletion, Task } from '../services/taskService';
+import { updateGoalProgress, GoalProgress } from '../services/goalProgressService';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
 import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage } from '../utils/responsive';
 import { useStatusBar } from '../context/StatusBarContext';
 import { getTextColorForBackground } from '../utils/colorUtils';
 import { getButtonColor } from '../utils/buttonUtils';
+import SafeStatusBar from '../components/SafeStatusBar';
 
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import SnappingCarousel, { SnappingCarouselRef } from '../components/SnappingCarousel';
@@ -37,9 +37,8 @@ import EnhancedTaskItem from '../components/home/EnhancedTaskItem';
 import { swipeableManager } from '../utils/swipeableManager';
 
 // Reanimated imports
+import { useHomeData } from '../context/HomeDataContext';
 import { useFocusEffect } from '@react-navigation/native';
-
-
 
 // Define types for our components
 interface User {
@@ -52,21 +51,6 @@ interface User {
 
 // Define header height as a constant
 const HEADER_HEIGHT = verticalScale(60);
-
-// Helper function to get a random bright color for heatmap
-const getRandomBrightColor = () => {
-    const brightColors = [
-      { light: colors.electricBlueLight, dark: colors.electricBlueDark },
-      { light: colors.hotPinkLight, dark: colors.hotPinkDark },
-      { light: colors.electricGreenLight, dark: colors.electricGreenDark },
-      { light: colors.vibrantOrangeLight, dark: colors.vibrantOrangeDark },
-      { light: colors.brightPurpleLight, dark: colors.brightPurpleDark },
-      { light: colors.sunnyYellowLight, dark: colors.sunnyYellowDark },
-      { light: colors.brightRedLight, dark: colors.brightRedDark },
-      { light: colors.mintLight, dark: colors.mintDark }
-    ];
-    return brightColors[Math.floor(Math.random() * brightColors.length)];
-  };
 
 // Memoize the component to prevent unnecessary re-renders
 const TimePicker = React.memo(({ 
@@ -86,6 +70,7 @@ const TimePicker = React.memo(({
 
   // Scroll to selected item when it changes or on mount
   useEffect(() => {
+    // Defer scrolling to improve initial render performance
     const timer = setTimeout(() => {
       if (scrollViewRef.current) {
         const index = items.indexOf(selectedValue);
@@ -95,7 +80,7 @@ const TimePicker = React.memo(({
           scrollViewRef.current.scrollTo({ y, animated: false });
         }
       }
-    }, 150);
+    }, 0); // Minimal delay to allow initial render to complete
     
     return () => {
       clearTimeout(timer);
@@ -129,7 +114,7 @@ const TimePicker = React.memo(({
         if (items[clampedIndex] !== selectedValue) {
           onValueChange(items[clampedIndex]);
         }
-      }, 50);
+      }, 5); // Reduced delay for better responsiveness
     }
   };
 
@@ -264,6 +249,14 @@ const HeatmapGrid = React.memo(({
   darkColor: string;
   onDatePress: (date: Date) => void;
 }) => {
+  const progressMap = useMemo(() => {
+    const map = new Map();
+    for (const progress of goalProgress) {
+      map.set(progress.date, progress);
+    }
+    return map;
+  }, [goalProgress]);
+
   const isToday = (date: Date) => {
     const today = new Date();
     return date.getDate() === today.getDate() &&
@@ -279,7 +272,7 @@ const HeatmapGrid = React.memo(({
     <View style={styles.heatmapGrid}>
       {heatmapDays.map((day, index) => {
         const dateStr = day.date.toISOString().split('T')[0];
-        const progressRecord = goalProgress.find(p => p.date === dateStr);
+        const progressRecord = progressMap.get(dateStr);
 
         // Determine cell color based on progress
         let cellBackgroundColor = `${lightColor}60`;
@@ -397,10 +390,8 @@ const HeatmapItem = React.memo(({
   const [isGridVisible, setIsGridVisible] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsGridVisible(true);
-    }, 200);
-    return () => clearTimeout(timer);
+    // Immediately show the grid instead of waiting 200ms
+    setIsGridVisible(true);
   }, []);
 
   // Calculate streak for this specific goal
@@ -497,6 +488,7 @@ const HeatmapItem = React.memo(({
                 onUpdateProgress(goalId, newProgress);
               } catch (error) {
                 console.error('Error marking goal as missed:', error);
+                Alert.alert('Error', 'Failed to mark goal as missed. Please try again.');
               }
             }
           },
@@ -515,6 +507,7 @@ const HeatmapItem = React.memo(({
                 onUpdateProgress(goalId, newProgress);
               } catch (error) {
                 console.error('Error marking goal as completed:', error);
+                Alert.alert('Error', 'Failed to mark goal as completed. Please try again.');
               }
             }
           }
@@ -639,16 +632,16 @@ const HeatmapItem = React.memo(({
         {/* Heatmap Legend */}
         <View style={styles.heatmapLegend}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendColorBox, { backgroundColor: darkColor }]} />
-            <Text style={styles.legendText}>Completed</Text>
+            {/* <View style={[styles.legendColorBox, { backgroundColor: darkColor }]} />
+            <Text style={styles.legendText}>Completed</Text> */}
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendColorBox, styles.legendMissed]} />
-            <Text style={styles.legendText}>Missed</Text>
+            {/* <View style={[styles.legendColorBox, styles.legendMissed]} />
+            <Text style={styles.legendText}>Missed</Text> */}
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendColorBox, styles.legendDefault]} />
-            <Text style={styles.legendText}>Not Marked</Text>
+            {/* <View style={[styles.legendColorBox, styles.legendDefault]} />
+            <Text style={styles.legendText}>Not Marked</Text> */}
           </View>
         </View>
       </View>
@@ -672,21 +665,15 @@ const HeatmapItem = React.memo(({
 });
 
 const MainHomeScreen = () => {
+  console.log(`[Perf] MainHomeScreen render start: ${Date.now()}`);
   const { user } = useAuth();
   const { screenBackgroundColor, backgroundColor, themePalette, setStatusBar } = useStatusBar();
-  const [loading, setLoading] = useState(true);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  
+  // Use data from HomeDataContext instead of local state
+  const { tasks, goals, goalsProgress, heatmapColors, loading, updateGoalProgress } = useHomeData();
+  
   const [addingTask, setAddingTask] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [weekStartDate, setWeekStartDate] = useState(() => {
-    // Not used in the new approach but kept for compatibility
-    const today = new Date();
-    const day = today.getDay();
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - day);
-    startDate.setHours(0, 0, 0, 0);
-    return startDate;
-  });
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalVisible, setIsTaskModalVisible] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
@@ -701,23 +688,31 @@ const MainHomeScreen = () => {
   // For task detail modal date/time picker
   const [showTaskDetailDatePicker, setShowTaskDetailDatePicker] = useState(false);
   const [showTaskDetailTimePicker, setShowTaskDetailTimePicker] = useState(false);
-  const [goals, setGoals] = useState<any[]>([]);
-  const [goalsProgress, setGoalsProgress] = useState<Record<string, GoalProgress[]>>({});
-  const [heatmapColors, setHeatmapColors] = useState<Record<string, {light: string, dark: string}>>({});
+  
   // For date/time selection in modals
   const [tempSelectedDate, setTempSelectedDate] = useState(new Date());
   const heatmapDaysRef = useRef<any[]>([]);
   const heatmapCarouselRef = useRef<SnappingCarouselRef>(null);
-  const monthScrollViewRef = useRef<ScrollView>(null);
+  const monthScrollViewRef = useRef<FlatList>(null);
   const [isReturningToToday, setIsReturningToToday] = useState(false);
   const runnerAnimation = useRef(new Animated.Value(0)).current;
   const todayPulseAnimation = useRef(new Animated.Value(1)).current;
+  
+  // Defer heavy content until after screen transition
+  const [deferredContentReady, setDeferredContentReady] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       // Set status bar to match the app's primary theme (only when needed)
       setStatusBar(themePalette.statusBar, 'light-content');
-    }, [themePalette.statusBar])
+      InteractionManager.runAfterInteractions(() => {
+        console.log(`[Perf] MainHomeScreen interactive: ${Date.now()}`);
+        setDeferredContentReady(true);
+      });
+      return () => {
+        console.log(`[Perf] MainHomeScreen blur/navigate away: ${Date.now()}`);
+      };
+    }, [themePalette.statusBar, setDeferredContentReady])
   );
 
   // For animated header
@@ -736,22 +731,6 @@ const MainHomeScreen = () => {
     extrapolate: 'clamp',
   });
 
-  
-
-  const fetchLinkedUsers = useCallback(async () => {
-    if (user?.uid) {
-      try {
-        const linkedUsers = await getLinkedUsers(user.uid);
-        const linkedUids = linkedUsers.map(u => u.uid);
-        return linkedUids;
-      } catch (error) {
-        console.error('Error fetching linked users:', error);
-        return [];
-      }
-    }
-    return [];
-  }, [user?.uid]);
-
   const isToday = (date: Date) => {
     const today = new Date();
     return date.getDate() === today.getDate() &&
@@ -759,30 +738,73 @@ const MainHomeScreen = () => {
            date.getFullYear() === today.getFullYear();
   };
 
-  // Initialize heatmap days only once when component mounts
+  const calendarDaysData = useMemo(() => {
+    return Array.from({ length: 30 }, (_, i) => {
+      const centerIndex = 15;
+      const day = new Date(selectedDate);
+      day.setDate(selectedDate.getDate() + (i - centerIndex));
+      return day;
+    });
+  }, [selectedDate]);
+
+  const renderDateItem = useCallback(({ item: day, index }: { item: Date, index: number }) => {
+    const isSelected = day.toDateString() === selectedDate.toDateString();
+    const isTodayDate = isToday(day);
+
+    return (
+      <View key={`${day.toISOString()}-${index}`} style={styles.dayContainer}>
+        <Text style={styles.monthIndicator}>
+          {day.toLocaleDateString('en-US', { month: 'short' })}
+        </Text>
+        <TouchableOpacity
+          style={[
+            styles.dayCircle,
+            isSelected && styles.selectedDayCircle,
+            isTodayDate && styles.todayDayCircle,
+            {
+              transform: [
+                { scale: isTodayDate ? todayPulseAnimation : 1 }
+              ]
+            }
+          ]}
+          onPress={() => {
+            setSelectedDate(day);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[
+            styles.dayName,
+            isSelected && styles.selectedDayText,
+            isTodayDate && styles.todayDayText
+          ]}>
+            {day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}
+          </Text>
+          <View style={[
+            styles.dayInnerCircle,
+            isSelected && styles.selectedDayInnerCircle,
+            isTodayDate && styles.todayDayInnerCircle
+          ]}>
+            <Text style={[
+              styles.dayNumber,
+              isSelected && styles.selectedDayNumber,
+              isTodayDate && styles.todayDayNumber
+            ]}>
+              {day.getDate()}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  }, [selectedDate, todayPulseAnimation, isToday]);
+
+  // Initialize heatmap days immediately when component mounts
   useEffect(() => {
     if (!heatmapDaysRef.current || heatmapDaysRef.current.length === 0) {
+      // Generate heatmap immediately for faster rendering
       const newDays = generateCalendarDaysForHeatmap();
       heatmapDaysRef.current = newDays;
     }
   }, []);
-
-  // Generate random colors for each goal heatmap when goals change
-  useEffect(() => {
-    const newHeatmapColors: Record<string, {light: string, dark: string}> = {};
-    let hasNewColors = false;
-    
-    goals.forEach(goal => {
-      if (!heatmapColors[goal.id]) {
-        newHeatmapColors[goal.id] = getRandomBrightColor();
-        hasNewColors = true;
-      }
-    });
-    
-    if (hasNewColors) {
-      setHeatmapColors(prev => ({ ...prev, ...newHeatmapColors }));
-    }
-  }, [goals]);
 
   // Pulse animation for today's date
   useEffect(() => {
@@ -805,18 +827,19 @@ const MainHomeScreen = () => {
     
     return () => {
       pulseAnimation.stop();
-    };
+    }
   }, [todayPulseAnimation]);
+
+  // Performance monitoring (development only)
+  useEffect(() => {
+    if (__DEV__) {
+      console.log('MainHomeScreen: Component mounted');
+    }
+  }, []);
 
   const scrollToSelectedDay = (dayIndex: number) => {
     if (monthScrollViewRef.current) {
-      const itemWidth = verticalScale(44) + scale(8); // day circle width + margin
-      // Get the width of the ScrollView container
-      const scrollViewWidth = Dimensions.get('window').width - scale(32); // Account for paddingHorizontal
-      // Calculate the offset to center the item
-      const centerOffset = (scrollViewWidth - itemWidth) / 2;
-      const scrollTo = dayIndex * itemWidth - centerOffset;
-      monthScrollViewRef.current?.scrollTo({ x: scrollTo, animated: true });
+      monthScrollViewRef.current.scrollToIndex({ animated: true, index: dayIndex, viewPosition: 0.5 });
     }
   };
 
@@ -828,8 +851,8 @@ const MainHomeScreen = () => {
       scrollToSelectedDay(15);
     };
 
-    // Only run the scroll positioning after interactions to avoid blocking the UI
-    InteractionManager.runAfterInteractions(() => {
+    // Use requestAnimationFrame instead of InteractionManager for faster execution
+    requestAnimationFrame(() => {
       findAndScroll();
     });
   }, [selectedDate]);
@@ -865,138 +888,11 @@ const MainHomeScreen = () => {
       scrollToSelectedDay(15);
     };
 
-    // Only run the scroll positioning after interactions to avoid blocking the UI
-    InteractionManager.runAfterInteractions(() => {
+    // Use requestAnimationFrame instead of InteractionManager for faster execution
+    requestAnimationFrame(() => {
       scrollToToday();
     });
   }, []);
-
-  // Set up real-time listeners once when component mounts
-  useEffect(() => {
-    let tasksUnsubscribe: (() => void) | null = null;
-    let goalsUnsubscribe: (() => void) | null = null;
-    let setupTimer: ReturnType<typeof setTimeout> | null = null;
-    let isComponentMounted = true; // Track component mount status
-
-    const setupListeners = async () => {
-      if (user && isComponentMounted) {
-        try {
-          const linkedUids = await fetchLinkedUsers();
-
-          // Set up real-time listener for tasks with a small delay
-          setTimeout(() => {
-            if (user && isComponentMounted) {
-              tasksUnsubscribe = subscribeToTasksForUserAndLinked(
-                user.uid,
-                linkedUids,
-                (fetchedTasks) => {
-                  if (isComponentMounted) {
-                    setTasks(fetchedTasks);
-                    if (loading) {
-                      setLoading(false);
-                    }
-                  }
-                }
-              );
-            }
-          }, 50); // Small delay to allow screen transition to complete
-
-          // Add a slightly longer delay before setting up goals listener to reduce initial load
-          setTimeout(() => {
-            if (user && isComponentMounted) {
-              // Set up real-time listener for goals
-              goalsUnsubscribe = subscribeToGoalsForUserAndLinked(
-                user.uid,
-                linkedUids,
-                (fetchedGoals) => {
-                  if (isComponentMounted) {
-                    setGoals(fetchedGoals);
-
-                    // Initialize heatmap colors for new goals
-                    setHeatmapColors(prev => {
-                      const newColors: Record<string, {light: string, dark: string}> = {};
-                      fetchedGoals.forEach(goal => {
-                        if (!prev[goal.id]) {
-                          newColors[goal.id] = getRandomBrightColor();
-                        }
-                      });
-                      return { ...prev, ...newColors };
-                    });
-
-                    // Fetch progress data for all goals with another delay
-                    if (fetchedGoals.length > 0) {
-                      setTimeout(() => {
-                        if (isComponentMounted) {
-                          const goalIds = fetchedGoals.map(goal => goal.id);
-                          // Add caching to prevent unnecessary fetches
-                          getGoalsProgress(goalIds, user.uid).then(progressData => {
-                            if (isComponentMounted) {
-                              // Group progress by goalId
-                              const progressByGoal: Record<string, GoalProgress[]> = {};
-                              progressData.forEach(progress => {
-                                if (!progressByGoal[progress.goalId]) {
-                                  progressByGoal[progress.goalId] = [];
-                                }
-                                progressByGoal[progress.goalId].push(progress);
-                              });
-                              setGoalsProgress(progressByGoal);
-                            }
-                          }).catch(error => {
-                            console.error('Error fetching goals progress:', error);
-                            // Set empty progress data on error to prevent infinite loading
-                            if (isComponentMounted) {
-                              const emptyProgress: Record<string, GoalProgress[]> = {};
-                              fetchedGoals.forEach(goal => {
-                                emptyProgress[goal.id] = [];
-                              });
-                              setGoalsProgress(emptyProgress);
-                            }
-                          });
-                        }
-                      }, 100); // Additional delay for progress data fetching
-                    }
-                  }
-                }
-              );
-            }
-          }, 200); // Longer delay to allow tasks to load first
-        } catch (error) {
-          console.error('Error setting up listeners:', error);
-          if (isComponentMounted && loading) {
-            setLoading(false);
-          }
-        }
-      }
-    };
-
-    // Defer the heavy setup to next frame to allow screen transition to complete
-    setupTimer = setTimeout(() => {
-      setupListeners();
-    }, 100); // Small delay to allow screen transition to complete
-
-    // Add a fallback to ensure loading is set to false even if there are errors
-    const fallbackTimer = setTimeout(() => {
-      if (isComponentMounted && loading) {
-        setLoading(false);
-      }
-    }, 3000); // 3 second fallback
-
-    return () => {
-      isComponentMounted = false; // Mark component as unmounted
-      if (setupTimer) {
-        clearTimeout(setupTimer);
-      }
-      if (fallbackTimer) {
-        clearTimeout(fallbackTimer);
-      }
-      if (tasksUnsubscribe) {
-        tasksUnsubscribe();
-      }
-      if (goalsUnsubscribe) {
-        goalsUnsubscribe();
-      }
-    };
-  }, [user, loading]); // Removed fetchLinkedUsers from dependencies since it's memoized with useCallback
 
   // Memoize the normalized selected date to avoid recalculating in filter
   const normalizedSelectedDate = useMemo(() => {
@@ -1007,18 +903,40 @@ const MainHomeScreen = () => {
 
   // Filter tasks based on selected date
   const filteredTasks = useMemo(() => {
+    if (!tasks.length) return [];
+    
     return tasks.filter(task => {
       // Check if task matches selected date
-      let matchesDate = true;
       if (task.dueDate) {
         const taskDate = task.dueDate.toDate();
         taskDate.setHours(0, 0, 0, 0);
-        matchesDate = taskDate.getTime() === normalizedSelectedDate;
+        return taskDate.getTime() === normalizedSelectedDate;
       }
-
-      return matchesDate;
+      return false; // Tasks without due dates won't be shown
     });
   }, [tasks, normalizedSelectedDate]);
+
+  // Memoize the sorted tasks to avoid re-sorting on every render
+  const sortedFilteredTasks = useMemo(() => {
+    return filteredTasks.slice().sort((a, b) => {
+      // First sort by completion status (incomplete tasks first)
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1;
+      }
+      
+      // Then sort by due date (earlier dates first)
+      if (a.dueDate && b.dueDate) {
+        return a.dueDate.toDate().getTime() - b.dueDate.toDate().getTime();
+      }
+      
+      // Tasks with due dates come before tasks without due dates
+      if (a.dueDate && !b.dueDate) return -1;
+      if (!a.dueDate && b.dueDate) return 1;
+      
+      // Finally sort by creation date (newer first)
+      return b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime();
+    });
+  }, [filteredTasks]);
 
   const addTask = async () => {
     if (taskTitle.trim() && taskDate) {
@@ -1058,14 +976,9 @@ const MainHomeScreen = () => {
           emoji: taskEmoji // Include emoji in creation
         };
 
-        setTasks(prevTasks => [...prevTasks, tempTask]);
-        const newTaskTitle = taskTitle.trim();
-        const newTaskEmoji = taskEmoji; // Capture current emoji
-        setIsTaskModalVisible(false);
-
         // Actually create the task
         await createTask({
-          text: newTaskTitle,
+          text: taskTitle.trim(),
           description: taskDescription,
           dueDate: Timestamp.fromDate(startDate),
           completed: false,
@@ -1073,15 +986,13 @@ const MainHomeScreen = () => {
           creatorName: user?.displayName || user?.name || user?.email || '',
           startTime: startTimeString,
           endTime: endTimeString,
-          emoji: newTaskEmoji // Include emoji in creation
+          emoji: taskEmoji // Include emoji in creation
         });
 
-        // Replace temporary task with actual task (real-time listener will handle this)
+        setIsTaskModalVisible(false);
       } catch (error) {
         console.error('Error creating task:', error);
         Alert.alert('Error', 'Failed to create task. Please try again.');
-        // Remove temporary task on error
-        setTasks(prevTasks => prevTasks.filter(t => !t.id.startsWith('temp_')));
       } finally {
         setAddingTask(false);
       }
@@ -1090,37 +1001,23 @@ const MainHomeScreen = () => {
 
   const toggleTask = useCallback(async (taskItem: Task) => {
     try {
-      // Optimistic update
-      setTasks(tasks => tasks.map(task =>
-        task.id === taskItem.id ? { ...task, completed: !task.completed } : task
-      ));
-
       // Actually toggle the task
       await toggleTaskCompletion(taskItem.id, taskItem.completed);
       // Real-time listener will update the UI when the change is confirmed
     } catch (error) {
       console.error('Error toggling task:', error);
       Alert.alert('Error', 'Failed to update task. Please try again.');
-      // Revert on error
-      setTasks(tasks => tasks.map(task =>
-        task.id === taskItem.id ? { ...task, completed: taskItem.completed } : task
-      ));
     }
   }, []);
 
   const deleteTaskItem = useCallback(async (taskId: string) => {
     try {
-      // Optimistic update
-      const taskToDelete = tasks.find(task => task.id === taskId);
-      setTasks(tasks => tasks.filter(task => task.id !== taskId));
-
       // Actually delete the task
       await deleteTask(taskId);
       // Real-time listener will update the UI when the change is confirmed
     } catch (error) {
       console.error('Error deleting task:', error);
       Alert.alert('Error', 'Failed to delete task. Please try again.');
-      // In a real scenario, the listener would restore the task if deletion failed server-side
     }
   }, []);
 
@@ -1136,14 +1033,6 @@ const MainHomeScreen = () => {
     setTaskEndHour(0); // Reset to 00
     setTaskEndMinute(0); // Reset to 00
     setIsTaskModalVisible(true);
-    
-    // Ensure time pickers reset to 00:00 with a small delay
-    setTimeout(() => {
-      setTaskStartHour(0);
-      setTaskStartMinute(0);
-      setTaskEndHour(0);
-      setTaskEndMinute(0);
-    }, 50);
   };
 
   const saveTaskEdits = async () => {
@@ -1156,22 +1045,6 @@ const MainHomeScreen = () => {
         const startTimeString = `${taskStartHour.toString().padStart(2, '0')}:${taskStartMinute.toString().padStart(2, '0')}`;
         const endTimeString = `${taskEndHour.toString().padStart(2, '0')}:${taskEndMinute.toString().padStart(2, '0')}`;
         
-        // Optimistic update
-        const updatedTasks = tasks.map(task =>
-          task.id === selectedTask.id
-            ? { 
-                ...task, 
-                text: taskTitle, 
-                description: taskDescription,
-                dueDate: Timestamp.fromDate(finalDueDate),
-                startTime: startTimeString,
-                endTime: endTimeString,
-                emoji: taskEmoji
-              }
-            : task
-        );
-        setTasks(updatedTasks);
-
         // Actually update the task
         await updateTask(selectedTask.id, {
           text: taskTitle,
@@ -1188,8 +1061,6 @@ const MainHomeScreen = () => {
       } catch (error) {
         console.error('Error editing task:', error);
         Alert.alert('Error', 'Failed to edit task. Please try again.');
-        // Revert on error
-        setTasks(tasks);
       }
     }
   };
@@ -1236,19 +1107,6 @@ const MainHomeScreen = () => {
     setTempSelectedDate(dueDate);
     setIsTaskModalVisible(true);
   }, []);
-
-  
-  
-  // Reset time values when modal opens
-  useEffect(() => {
-    if (isTaskModalVisible && !selectedTask) {
-      // Ensure time values are reset to 00:00 when modal opens for adding a task
-      setTaskStartHour(0);
-      setTaskStartMinute(0);
-      setTaskEndHour(0);
-      setTaskEndMinute(0);
-    }
-  }, [isTaskModalVisible, selectedTask]);
 
   // Helper function to generate calendar days for heatmap (shows actual dates)
   const generateCalendarDaysForHeatmap = () => {
@@ -1347,232 +1205,175 @@ const MainHomeScreen = () => {
 
   return ( 
     <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+      <SafeStatusBar />
       <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
-        {/* Show loading indicator while initializing */}
-        {loading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={colors.electricBlue} />
-            <Text style={{ marginTop: verticalScale(10), fontSize: responsiveFontSize(16), color: colors.text }}>
-              Loading your habits...
-            </Text>
-          </View>
-        ) : (
-          <>
-            {/* Animated Header */}
-            <Animated.View
-              style={[
-                styles.headerBar,
-                {
-                  transform: [{ translateY: headerTranslateY }],
-                  opacity: headerOpacity,
-                  backgroundColor: backgroundColor,
-                }
-              ]}
-            >
-              <View style={styles.headerContent}>
-                <Image source={require('../../assets/images/heartlogo.png')} style={styles.headerLogo} />
-                <Text style={[styles.headerText, { color: getTextColorForBackground(backgroundColor) }]}>Habit Hearts</Text>
-                <TouchableOpacity
-                  style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary), shadowColor: getButtonColor(themePalette.primary) }]}
-                  onPress={openAddTaskModal}
-                >
-                  <Icon name="add" size={responsiveFontSize(20)} color={colors.textLight} />
-                </TouchableOpacity>
-              </View>
+        {/* Render content immediately without loading screen */}
+        <>
+          {/* Animated Header */}
+          <Animated.View
+            style={[
+              styles.headerBar,
+              {
+                transform: [{ translateY: headerTranslateY }],
+                opacity: headerOpacity,
+                backgroundColor: backgroundColor,
+              }
+            ]}
+          >
+            <View style={styles.headerContent}>
+              <Image source={require('../../assets/images/heartlogo.png')} style={styles.headerLogo} />
+              <Text style={[styles.headerText, { color: getTextColorForBackground(backgroundColor) }]}>Habit Hearts</Text>
+              <TouchableOpacity
+                style={[styles.headerAddButton, { backgroundColor: getButtonColor(themePalette.primary), shadowColor: getButtonColor(themePalette.primary) }]}
+                onPress={openAddTaskModal}
+              >
+                <Icon name="add" size={responsiveFontSize(20)} color={colors.textLight} />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {isReturningToToday && (
+            <Animated.View style={[styles.runnerContainer, {
+              transform: [{
+                translateX: runnerAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [widthPercentage(100), -50] // From right to left
+                })
+              }]
+            }]}>
+              <Text style={styles.runnerEmoji}>🏃</Text>
             </Animated.View>
+          )}
 
-            {isReturningToToday && (
-              <Animated.View style={[styles.runnerContainer, {
-                transform: [{
-                  translateX: runnerAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [widthPercentage(100), -50] // From right to left
-                  })
-                }]
-              }]}>
-                <Text style={styles.runnerEmoji}>🏃</Text>
-              </Animated.View>
+          {/* Scrollable Content */}
+          <Animated.ScrollView
+            style={styles.scrollContainer}
+            contentContainerStyle={styles.scrollContentContainer}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: true }
             )}
+            scrollEventThrottle={16}
+            onTouchStart={() => {
+              // Close all swipeables when touching the scroll view
+              swipeableManager.closeAll();
+            }}
+          >
+            {(() => { console.log(`[Perf] Before weekSelectorContainer: ${Date.now()}`); return null; })()}
+            <View style={styles.weekSelectorContainer}>
+              <View style={styles.daysScrollViewContainer}>
+                {/* Left fade shade */}
+                <View style={styles.leftFade} pointerEvents="none">
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
+                </View>
 
-            {/* Scrollable Content */}
-            <Animated.ScrollView
-              style={styles.scrollContainer}
-              contentContainerStyle={styles.scrollContentContainer}
-              onScroll={Animated.event(
-                [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                { useNativeDriver: true }
-              )}
-              scrollEventThrottle={16}
-              onTouchStart={() => {
-                // Close all swipeables when touching the scroll view
-                swipeableManager.closeAll();
-              }}
-            >
-              <View style={styles.weekSelectorContainer}>
-                <View style={styles.daysScrollViewContainer}>
-                  {/* Left fade shade */}
-                  <View style={styles.leftFade} pointerEvents="none">
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
-                  </View>
+                <FlatList
+                  ref={monthScrollViewRef}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  data={calendarDaysData}
+                  renderItem={renderDateItem}
+                  keyExtractor={(item, index) => `${item.toISOString()}-${index}`}
+                  style={styles.weekDaysContainer}
+                  contentContainerStyle={styles.weekDaysContentContainer}
+                  initialScrollIndex={15}
+                  getItemLayout={(data, index) => (
+                    { length: verticalScale(44) + scale(8), offset: (verticalScale(44) + scale(8)) * index, index }
+                  )}
+                  decelerationRate="fast"
+                  snapToInterval={verticalScale(44) + scale(8)}
+                />
 
-                  <ScrollView
-                    ref={monthScrollViewRef}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    pagingEnabled={false}
-                    decelerationRate="fast"
-                    snapToInterval={verticalScale(44) + scale(8)} // day circle width + margin
-                    style={styles.weekDaysContainer}
-                    contentContainerStyle={styles.weekDaysContentContainer}
-                  >
-                    {Array.from({ length: 30 }, (_, i) => {
-                      // Render only 30 days instead of 60 for better performance
-                      // Center around the selected date
-                      const centerIndex = 15; // Middle of the 30 days
-                      const day = new Date(selectedDate);
-                      day.setDate(selectedDate.getDate() + (i - centerIndex));
-                      const isSelected = day.toDateString() === selectedDate.toDateString();
-                      const isTodayDate = isToday(day);
-
-                      return (
-                        <View key={`${day.toISOString()}-${i}`} style={styles.dayContainer}>
-                          <Text style={styles.monthIndicator}>
-                            {day.toLocaleDateString('en-US', { month: 'short' })}
-                          </Text>
-                          <TouchableOpacity
-                            style={[
-                              styles.dayCircle,
-                              isSelected && styles.selectedDayCircle,
-                              isTodayDate && styles.todayDayCircle,
-                              {
-                                transform: [
-                                  { scale: isTodayDate ? todayPulseAnimation : 1 }
-                                ]
-                              }
-                            ]}
-                            onPress={() => {
-                              setSelectedDate(day);
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={[
-                              styles.dayName,
-                              isSelected && styles.selectedDayText,
-                              isTodayDate && styles.todayDayText
-                            ]}>
-                              {day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}
-                            </Text>
-                            <View style={[
-                              styles.dayInnerCircle,
-                              isSelected && styles.selectedDayInnerCircle,
-                              isTodayDate && styles.todayDayInnerCircle
-                            ]}>
-                              <Text style={[
-                                styles.dayNumber,
-                                isSelected && styles.selectedDayNumber,
-                                isTodayDate && styles.todayDayNumber
-                              ]}>
-                                {day.getDate()}
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
-
-                  {/* Right fade shade */}
-                  <View style={styles.rightFade} pointerEvents="none">
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
-                    <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
-                  </View>
+                {/* Right fade shade */}
+                <View style={styles.rightFade} pointerEvents="none">
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0)' }} />
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.4)' }} />
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)' }} />
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.8)' }} />
                 </View>
               </View>
+            </View>
+            {(() => { console.log(`[Perf] After weekSelectorContainer: ${Date.now()}`); return null; })()}
 
-              {/* Today Button */}
-              <View style={{
-                flexDirection: 'row',
-                alignSelf: 'center',
-                alignItems: 'center',
-                paddingHorizontal: scale(16),
-                backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                borderRadius: moderateScale(24),
-                marginBottom: verticalScale(20),
-                borderWidth: 1,
-                borderColor: 'rgba(255, 255, 255, 0.8)',
-              }}>
-                <Icon name="favorite" size={responsiveFontSize(18)} color={colors.hotPink} />
-                <Text style={[styles.hiText, { marginLeft: scale(8) }]}>Hi, {user?.name || 'User'}, </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    const today = new Date();
-                    setSelectedDate(today);
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={[styles.hiText, { textDecorationLine: 'none', fontWeight: '800' }]}>
-                    today is 
-                  </Text>
-                  <Text style={[styles.hiText, { 
-                    textDecorationLine: 'underline', 
-                    marginLeft: scale(6),
-                    fontWeight: '900'
-                  }]}>
-                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                  </Text>
-                  <Icon name="calendar-today" size={responsiveFontSize(16)} color={colors.electricBlue} style={{ marginLeft: scale(6) }} />
-                </TouchableOpacity>
-              </View>
+            {/* Today Button */}
+            <View style={{
+              flexDirection: 'row',
+              alignSelf: 'center',
+              alignItems: 'center',
+              paddingHorizontal: scale(16),
+              backgroundColor: 'rgba(255, 255, 255, 0.7)',
+              borderRadius: moderateScale(24),
+              marginBottom: verticalScale(20),
+              borderWidth: 1,
+              borderColor: 'rgba(255, 255, 255, 0.8)',
+            }}>
+              <Icon name="favorite" size={responsiveFontSize(18)} color={colors.hotPink} />
+              <Text style={[styles.hiText, { marginLeft: scale(8) }]}>Hi, {user?.name || 'User'}, </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  const today = new Date();
+                  setSelectedDate(today);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={[styles.hiText, { textDecorationLine: 'none', fontWeight: '800' }]}>
+                  today is 
+                </Text>
+                <Text style={[styles.hiText, { 
+                  textDecorationLine: 'underline', 
+                  marginLeft: scale(6),
+                  fontWeight: '900'
+                }]}>
+                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                </Text>
+                <Icon name="calendar-today" size={responsiveFontSize(16)} color={colors.electricBlue} style={{ marginLeft: scale(6) }} />
+              </TouchableOpacity>
+            </View>
 
-              {/* Task List */}
+            {/* Task List */}
+            {deferredContentReady ? (
               <View style={styles.taskListContainer}>
-                {filteredTasks
-                  .slice()
-                  .sort((a, b) => {
-                    // First sort by completion status (incomplete tasks first)
-                    if (a.completed !== b.completed) {
-                      return a.completed ? 1 : -1;
-                    }
-                    
-                    // Then sort by due date (earlier dates first)
-                    if (a.dueDate && b.dueDate) {
-                      return a.dueDate.toDate().getTime() - b.dueDate.toDate().getTime();
-                    }
-                    
-                    // Tasks with due dates come before tasks without due dates
-                    if (a.dueDate && !b.dueDate) return -1;
-                    if (!a.dueDate && b.dueDate) return 1;
-                    
-                    // Finally sort by creation date (newer first)
-                    return b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime();
-                  })
-                  .map((item) => (
-                    <EnhancedTaskItem
-                      key={item.id}
-                      item={item}
-                      user={user}
-                      onOpenTaskDetail={openTaskDetail}
-                      onDeleteTask={deleteTaskItem}
-                      onToggleTask={toggleTask}
-                    />
-                  ))}
-                {filteredTasks.length === 0 && (
+                {filteredTasks.length > 0 ? (
+                  <FlatList
+                    data={sortedFilteredTasks}
+                    renderItem={({ item }) => (
+                      <EnhancedTaskItem
+                        item={item}
+                        user={user}
+                        onOpenTaskDetail={openTaskDetail}
+                        onDeleteTask={deleteTaskItem}
+                        onToggleTask={toggleTask}
+                      />
+                    )}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={5}
+                    windowSize={5}
+                    removeClippedSubviews={true}
+                  />
+                ) : (
                   <View style={styles.emptyContainer}>
                     <Text style={globalStyles.text}>No tasks found. Add your first task!</Text>
                   </View>
                 )}
               </View>
-              {/* Goals Heatmap */}
+            ) : (
+              <View style={styles.emptyContainer}>
+                <ActivityIndicator color={colors.electricBlue} size="large" />
+              </View>
+            )}
+            
+            {/* Goals Heatmap - render immediately without delay */}
+            {(deferredContentReady || !loading) && (
               <View style={styles.heatmapContainer}>
                 <View style={styles.heatmapHeader}>
                   <Text style={styles.heatmapTitle}>Your Goals Progress</Text>
@@ -1631,10 +1432,8 @@ const MainHomeScreen = () => {
                           darkColor={darkColor}
                           goalProgress={goalProgress}
                           onUpdateProgress={(goalId, newProgress) => {
-                            setGoalsProgress(prev => ({
-                              ...prev,
-                              [goalId]: newProgress
-                            }));
+                            // Update the goalsProgress in the context
+                            updateGoalProgress(goalId, newProgress);
                           }}
                           user={user}
                           heatmapDays={heatmapDaysRef.current || []}
@@ -1649,9 +1448,9 @@ const MainHomeScreen = () => {
                   </View>
                 )}
               </View>
-            </Animated.ScrollView>
-          </>
-        )}
+            )}
+          </Animated.ScrollView>
+        </>
 
         {/* Task Modal */}
         <Modal
@@ -1697,46 +1496,17 @@ const MainHomeScreen = () => {
                   style={styles.emojiScrollView}
                   contentContainerStyle={styles.emojiScrollContent}
                   horizontal={true}
+                  decelerationRate="fast"
                 >
                   <View style={styles.emojiRowContainer}>
                     <View style={styles.emojiRow}>
                       {[
-                        // Row 1 - Events, Activities, Objects
-                        '🎯', '🎉', '🥳', '🎊', '🎂', '🎁', '🎈', '🎆', '🎇', '🧨',
-                        '✨', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎬', '🎭', '🎨',
-                        '🎪', '🎫', '🎟️', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
-                        '🎤', '🎧', '🎮', '🎲', '♟️', '⚽', '🏀', '🏈', '⚾', '🎾',
-                        '🏐', '🏉', '🎱', '🪀', '🏓', '🏸', '🥅', '⛳', '🪁', '🏹',
-                        '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '⛸️', '🥌', '🎿',
-                        '⛷️', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️',
-                        '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆'
+                        // Reduced set of most commonly used emojis for better performance
+                        '🎯', '🎉', '🏆', '⭐', '❤️', '👍', '💪', '✅', '📅', '📝',
+                        '⚽', '🏀', '🎮', '🎵', '🎸', '🎤', '🎨', '📚', '💼', '🏠'
                       ].map((emoji, index) => (
                         <TouchableOpacity
-                          key={`row1-${emoji}-${index}`}
-                          style={[
-                            styles.emojiOption,
-                            taskEmoji === emoji && styles.selectedEmoji
-                          ]}
-                          onPress={() => setTaskEmoji(emoji)}
-                        >
-                          <Text style={styles.emojiOptionText}>{emoji}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    <View style={styles.emojiRow}>
-                      {[
-                        // Row 2 - Food, Nature, Faces, Hearts
-                        '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒',
-                        '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬',
-                        '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐',
-                        '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇',
-                        '🥓', '🥩', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪',
-                        '🥗', '🍿', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍮', '🎂',
-                        '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
-                        '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚'
-                      ].map((emoji, index) => (
-                        <TouchableOpacity
-                          key={`row2-${emoji}-${index}`}
+                          key={`emoji-${index}`}
                           style={[
                             styles.emojiOption,
                             taskEmoji === emoji && styles.selectedEmoji
@@ -1892,6 +1662,7 @@ const MainHomeScreen = () => {
             </View>
           </View>
         </Modal>
+        {(() => { console.log(`[Perf] MainHomeScreen render end: ${Date.now()}`); return null; })()}
       </View>
     </SafeAreaView>
   );
@@ -1988,43 +1759,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heatmapNavButtonText: {
-    color: colors.textLight,
     fontSize: responsiveFontSize(20),
+    color: colors.textLight,
     fontWeight: '700',
   },
-  dailyCheckButton: {
-    paddingHorizontal: scale(24),
-    paddingVertical: verticalScale(12),
-    borderRadius: moderateScale(30),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginTop: verticalScale(12),
-    marginBottom: verticalScale(18),
-    borderWidth: 1,
-  },
-  dailyCheckButtonText: {
-    fontSize: responsiveFontSize(15),
-    fontWeight: '800',
-    marginLeft: scale(8),
-  },
   goalHeatmapContainer: {
-    width: '100%',
-    marginBottom: verticalScale(16),
+    marginBottom: verticalScale(20),
   },
   goalHeatmap: {
     borderRadius: moderateScale(20),
-    paddingVertical: scale(16),
-    paddingHorizontal: scale(16),
-    height: '100%',
-    // Flat surface with no shadow
+    padding: scale(16),
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   goalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(16),
+    marginBottom: verticalScale(12),
   },
   goalName: {
     fontSize: responsiveFontSize(19),
@@ -2065,6 +1817,19 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginBottom: verticalScale(4),
     fontWeight: '600',
+  },
+  dailyCheckButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: moderateScale(16),
+    paddingVertical: verticalScale(12),
+    marginBottom: verticalScale(16),
+  },
+  dailyCheckButtonText: {
+    fontSize: responsiveFontSize(16),
+    fontWeight: '600',
+    marginLeft: scale(8),
   },
   heatmapCalendar: {
     borderRadius: moderateScale(16),
@@ -2137,9 +1902,6 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(20),
     borderRadius: moderateScale(12),
     paddingVertical: verticalScale(12),
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   legendItem: {
     flexDirection: 'row',
@@ -2222,7 +1984,6 @@ const styles = StyleSheet.create({
   },
   weekDaysContainer: {
     flex: 1,
-    marginBottom: verticalScale(12),
   },
   weekDaysContentContainer: {
     flexDirection: 'row',
@@ -2465,17 +2226,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: scale(2),
     borderRadius: moderateScale(8),
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   currentMonthDay: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   otherMonthDay: {
     opacity: 0.4,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   selectedDay: {
     backgroundColor: colors.electricBlue,
@@ -2728,4 +2487,10 @@ const styles = StyleSheet.create({
   },
 });
 
-export default React.memo(MainHomeScreen);
+// Add a custom comparison function to React.memo to prevent unnecessary re-renders
+export default React.memo(MainHomeScreen, (prevProps, nextProps) => {
+  // Since this is the main screen component and doesn't receive props,
+  // we can just return true to prevent re-renders based on props
+  // The component will only re-render when its internal state or context changes
+  return false; // This will cause a re-render only when state/context changes
+});

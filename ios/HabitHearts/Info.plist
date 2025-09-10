@@ -71,5 +71,9 @@
 		<string>Zocial.ttf</string>
 		<string>Allura-Regular.ttf</string>
 	</array>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 </dict>
 </plist>

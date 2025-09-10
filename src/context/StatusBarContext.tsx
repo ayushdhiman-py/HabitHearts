@@ -27,7 +27,7 @@ interface StatusBarProviderProps {
 
 export const StatusBarProvider: React.FC<StatusBarProviderProps> = ({ children }) => {
   const [backgroundColor, setBackgroundColor] = useState('#FF2B9D'); // Default hot pink (30% lighter would be #FFE6F5)
-  const [barStyle, setBarStyle] = useState<'light-content' | 'dark-content' | 'default'>('light-content');
+  const [barStyle, setBarStyle] = useState<'light-content' | 'dark-content' | 'default'>('dark-content'); // Changed to dark-content for better visibility
   const [screenBackgroundColor, setScreenBackgroundColor] = useState('#FFE6F5'); // Default hot pink (80% lighter)
   const [themePalette, setThemePalette] = useState(createThemePalette('#FF2B9D')); // Default palette
   const { selectedTheme } = useTheme();
@@ -38,23 +38,23 @@ export const StatusBarProvider: React.FC<StatusBarProviderProps> = ({ children }
     setThemePalette(palette);
     setBackgroundColor(palette.bottomTab);
     setScreenBackgroundColor(palette.screenBackground);
-    setBarStyle(palette.textOnBottomTab === '#FFFFFF' ? 'light-content' : 'dark-content');
+    setBarStyle('dark-content'); // Always use dark-content for better visibility with translucent background
   }, [selectedTheme]);
 
   const setStatusBar = useCallback((newBackgroundColor: string, newBarStyle: 'light-content' | 'dark-content' | 'default') => {
     const palette = createThemePalette(newBackgroundColor);
     setThemePalette(palette);
     setBackgroundColor(palette.bottomTab);
-    setBarStyle(newBarStyle);
+    setBarStyle('dark-content'); // Always use dark-content for better visibility with translucent background
     setScreenBackgroundColor(palette.screenBackground);
   }, []);
 
   useEffect(() => {
     StatusBar.setBarStyle(barStyle, true);
-    // Use the actual theme color for the StatusBar (not lightened)
-    StatusBar.setBackgroundColor(themePalette.statusBar, true);
+    // Use a semi-transparent background for the glass effect
+    StatusBar.setBackgroundColor('rgba(255, 255, 255, 0.85)', true);
     if (Platform.OS === 'android') {
-      StatusBar.setTranslucent(false);
+      StatusBar.setTranslucent(true);
     }
   }, [backgroundColor, barStyle, themePalette.statusBar]);
 

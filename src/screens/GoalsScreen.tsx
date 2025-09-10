@@ -1,38 +1,25 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Modal,
-  TouchableOpacity,
-  Alert,
-  TextInput,
-  FlatList,
-  BackHandler,
-  Platform,
-  Image,
-  ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, ActivityIndicator, Modal, InteractionManager } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { useStatusBar } from '../context/StatusBarContext';
-import { createGoal, updateGoal, deleteGoal, Goal, subscribeToGoalsForUserAndLinked, getGoalsForUserAndLinked } from '../services/goalService';
-import { getLinkedUsers, User as UserServiceUser } from '../services/userService';
+import { getLinkedUsers } from '../services/userService';
+import { createGoal, deleteGoal, getGoalsForUserAndLinked, subscribeToGoalsForUserAndLinked, updateGoal } from '../services/goalService';
+import { getGoalsProgress, updateGoalProgress, GoalProgress } from '../services/goalProgressService';
 import colors from '../theme/colors';
 import globalStyles from '../theme/styles';
-import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage, heightPercentage } from '../utils/responsive';
+import { responsiveFontSize, scale, verticalScale, moderateScale, widthPercentage } from '../utils/responsive';
+import { useStatusBar } from '../context/StatusBarContext';
 import { getTextColorForBackground } from '../utils/colorUtils';
 import { getButtonColor } from '../utils/buttonUtils';
+import SafeStatusBar from '../components/SafeStatusBar';
 
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { Timestamp } from 'firebase/firestore';
-import { useFocusEffect } from '@react-navigation/native';
-import { swipeableManager } from '../utils/swipeableManager';
-import { getGoalsProgress, GoalProgress } from '../services/goalProgressService';
+import { FlatList, TextInput } from 'react-native-gesture-handler';
 
 // Memoize the component to prevent unnecessary re-renders
 const GoalsScreen = () => {
+  console.log(`[Perf] GoalsScreen render start: ${Date.now()}`);
   const { user } = useAuth() as { user: any };
   const { screenBackgroundColor, backgroundColor, themePalette } = useStatusBar();
   const [goals, setGoals] = useState<any[]>([]);
@@ -45,6 +32,17 @@ const GoalsScreen = () => {
   const [editingGoal, setEditingGoal] = useState<any>(null);
   const [editGoalText, setEditGoalText] = useState('');
   const [newGoalText, setNewGoalText] = useState('');
+
+  useFocusEffect(
+    useCallback(() => {
+      InteractionManager.runAfterInteractions(() => {
+        console.log(`[Perf] GoalsScreen interactive: ${Date.now()}`);
+      });
+      return () => {
+        console.log(`[Perf] GoalsScreen blur/navigate away: ${Date.now()}`);
+      };
+    }, [])
+  );
 
   useEffect(() => {
     const fetchGoals = async () => {
@@ -279,6 +277,7 @@ const GoalsScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+        <SafeStatusBar />
         <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
           <View style={[styles.header, { backgroundColor: backgroundColor }]}>
             <Text style={[styles.title, { color: getTextColorForBackground(backgroundColor) }]}>Your Goals</Text>
@@ -293,6 +292,7 @@ const GoalsScreen = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: backgroundColor }} edges={['top', 'left', 'right']}>
+      <SafeStatusBar />
       <View style={{ flex: 1, backgroundColor: screenBackgroundColor }}>
         <View style={[styles.header, { backgroundColor: backgroundColor }]}>
           <Text style={[styles.title, { color: getTextColorForBackground(backgroundColor) }]}>Your Goals</Text>
@@ -430,6 +430,7 @@ const GoalsScreen = () => {
           </View>
         </View>
       </Modal>
+      {(() => { console.log(`[Perf] GoalsScreen render end: ${Date.now()}`); return null; })()}
     </SafeAreaView>
   );
 };
